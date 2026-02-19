@@ -1,0 +1,10 @@
+# Pretty URLs
+/dashboard    /dashboard.html   302
+/admin        /admin.html       302
+/it           /it.html          302
+/module       /module.html      302
+/quiz         /quiz.html        302
+/set-password /set-password.html 302
+
+# Never serve source from /functions
+/functions/*  /404.html         404

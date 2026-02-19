@@ -128,7 +128,7 @@ async function dashboardInit() {
   }
 
   if (me.roles.includes('admin')) {
-    adminTabBtn.classList.remove('hidden');    adminStandaloneBtn.addEventListener('click', () => location.href = 'admin.html');
+    adminTabBtn.classList.remove('hidden');
   } else {
     adminTabBtn.classList.add('hidden');  }
 
