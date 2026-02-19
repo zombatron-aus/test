@@ -46,7 +46,8 @@ function bufToB64(buf) {
   return btoa(bin);
 }
 
-export async function hashPasswordPBKDF2(password, saltB64 = null, iterations = 200000) {
+export async function hashPasswordPBKDF2(password, saltB64 = null, iterations = 100000) {
+  iterations = Math.min(iterations || 100000, 100000);
   const salt = saltB64 ? b64ToBuf(saltB64) : crypto.getRandomValues(new Uint8Array(16)).buffer;
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(

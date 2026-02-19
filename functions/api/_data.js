@@ -50,10 +50,10 @@ export const DEFAULT_USERS = [
     "name": "Admin User",
     "username": "admin",
     "pwd": {
-      "algo": "pbkdf2-sha256",
-      "iter": 200000,
-      "salt": "3VoktdBOa/po+Jw56IaLPQ==",
-      "dk": "tzRhbHh9mSuoLCAfsAiAzeqtCE+LwPdAkZl8MilE9Lk="
+          "algo": "pbkdf2-sha256",
+          "iter": 100000,
+          "salt": "sRWnprlARFa7ml97N6wstQ==",
+          "dk": "yRlWD4n1M1QWhXDXu0l7Offh42WxdzyTq/h4lS/ZBno="
     },
     "roles": [
       "admin"
@@ -67,10 +67,10 @@ export const DEFAULT_USERS = [
     "name": "Swim Instructor",
     "username": "instructor",
     "pwd": {
-      "algo": "pbkdf2-sha256",
-      "iter": 200000,
-      "salt": "TKYRXWtvsOIozyduJatHwQ==",
-      "dk": "LFXacqhu0uYgbkEm09foP95BpmMgVKN+sOYvqaAWxaQ="
+          "algo": "pbkdf2-sha256",
+          "iter": 100000,
+          "salt": "IoQZorgkTL4w6Cxx2qLi4g==",
+          "dk": "4OmD/qn5ae6DZP1Sgh81+3oiFemTJj2BTk+JBPwY19c="
     },
     "roles": [
       "instructor"
@@ -84,10 +84,10 @@ export const DEFAULT_USERS = [
     "name": "Customer Service",
     "username": "cs",
     "pwd": {
-      "algo": "pbkdf2-sha256",
-      "iter": 200000,
-      "salt": "7SyYM0zQuo+vg5tN4ieCDA==",
-      "dk": "z8xInHEhiKi2Hk6FEQ9YNne1GQJ6BQupli+sGiv46jI="
+          "algo": "pbkdf2-sha256",
+          "iter": 100000,
+          "salt": "Kzo9dZ0XOwLg1EpkpZ29rw==",
+          "dk": "VNhNjqgqrLUAgE81/xe9cpGSZ3UmdP1KgBwsOlWO/f4="
     },
     "roles": [
       "cs"
