@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bright Waves – Admin</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <h2 style="margin:0;color:var(--primary)">Bright Waves</h2>
+      </div>
+      <div class="pill">
+        <span id="currentUserInfo" style="font-weight:900"></span>
+        <button class="secondary" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+
+    <div id="pageHost"></div>
+  </div>
+
+  <div id="welcomeOverlay" class="overlay hidden">
+    <div class="card overlay-card">
+      <div class="spark" aria-hidden="true"></div>
+      <h3 id="welcomeTitle" style="color:var(--primary)">Message</h3>
+      <p id="welcomeSubtitle">…</p>
+      <button id="welcomeContinueBtn" style="width:100%">Continue</button>
+    </div>
+  </div>
+
+  <script src="/assets/app.js"></script>
+  <script>adminPageInit();</script>
+</body>
+</html>

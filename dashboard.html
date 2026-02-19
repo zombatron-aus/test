@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bright Waves – Dashboard</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <h2 style="margin:0;color:var(--primary)">Bright Waves Training Portal</h2>
+      </div>
+      <div class="pill">
+        <span id="currentUserInfo" style="font-weight:900"></span>
+        <button class="secondary" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button id="trainingTabBtn" class="tab-btn active">Training</button>
+      <button id="adminTabBtn" class="tab-btn hidden">Admin Panel</button>
+      <button id="adminStandaloneBtn" class="tab-btn hidden">Open Admin Page</button>
+    </div>
+
+    <div id="trainingTab">
+      <div class="card">
+        <div class="row" style="align-items:flex-end">
+          <div style="flex:1">
+            <strong>Overall Progress</strong>
+            <div class="progress-wrap">
+              <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+            </div>
+            <div class="kpi">
+              <small id="progressText">0% Complete</small>
+              <small id="progressCount">0 / 0 modules</small>
+            </div>
+          </div>
+          <div style="min-width:220px">
+            <button class="ghost" onclick="location.href='module.html?id=introduction'" style="width:100%">Open Introduction</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="moduleList" class="list"></div>
+    </div>
+
+    <div id="adminTab" class="hidden"></div>
+  </div>
+
+  <div id="welcomeOverlay" class="overlay hidden">
+    <div class="card overlay-card">
+      <div class="spark" aria-hidden="true"></div>
+      <h3 id="welcomeTitle" style="color:var(--primary)">Welcome</h3>
+      <p id="welcomeSubtitle">Loading…</p>
+      <button id="welcomeContinueBtn" style="width:100%">Continue</button>
+    </div>
+  </div>
+
+  <script src="/assets/app.js"></script>
+  <script>dashboardInit();</script>
+</body>
+</html>
