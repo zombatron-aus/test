@@ -1,7 +1,7 @@
 import { json, seedIfNeeded, loadUserById, saveUser, computeUserProgress, hashPasswordPBKDF2 } from "../_helpers.js";
 
 function requireAdmin(user) {
-  return user?.roles?.includes("admin");
+    return user?.roles?.includes("admin") || user?.roles?.includes("it");
 }
 
 export async function onRequestGet({ request, env, data }) {

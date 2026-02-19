@@ -150,7 +150,7 @@ button.danger:hover{background:#b91c1c}
 
 /* Admin: role checkbox alignment */
 .role-list{display:flex;flex-direction:column;gap:10px}
-.role-item{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,0.7);border:1px solid rgba(0,180,216,0.12)}
+.role-item{display:flex;align-items:center;gap:12px;justify-content:flex-start;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,0.7);border:1px solid rgba(0,180,216,0.12)}
 .role-item .left{display:flex;align-items:center;gap:10px}
 .role-item input[type=checkbox]{width:16px;height:16px}
 

@@ -127,7 +127,7 @@ async function dashboardInit() {
     if (tab === 'it' && itTab) { itTab.classList.remove('hidden'); itTabBtn.classList.add('active'); }
   }
 
-  if (me.roles.includes('admin')) {
+  if (me.roles.includes('admin') || me.roles.includes('it')) {
     adminTabBtn.classList.remove('hidden');
   } else {
     adminTabBtn.classList.add('hidden');  }
@@ -175,7 +175,7 @@ async function dashboardInit() {
       list.appendChild(row);
     });
 
-  if (me.roles.includes('admin')) {
+  if (me.roles.includes('admin') || me.roles.includes('it')) {
     await adminPanelInitInline(mods);
   }
 }
@@ -459,9 +459,12 @@ async function adminPanelWire(mount) {
             <div>
               <label style="font-size:12px;color:var(--muted);font-weight:900">Roles</label>
               <div class="card" style="padding:12px;margin:8px 0 0;background:rgba(240,249,255,0.55);border:1px solid rgba(0,180,216,0.18)">
-                <label style="display:flex;gap:10px;align-items:center;margin:6px 0"><input type="checkbox" id="editRoleAdmin"> Admin</label>
-                <label style="display:flex;gap:10px;align-items:center;margin:6px 0"><input type="checkbox" id="editRoleInstructor"> Instructor</label>
-                <label style="display:flex;gap:10px;align-items:center;margin:6px 0"><input type="checkbox" id="editRoleCS"> Customer Service</label>
+                <div class="role-list">
+                <div class="role-item"><div class="left"><input type="checkbox" id="editRoleAdmin"><span>Admin</span></div></div>
+                <div class="role-item"><div class="left"><input type="checkbox" id="editRoleInstructor"><span>Instructor</span></div></div>
+                <div class="role-item"><div class="left"><input type="checkbox" id="editRoleCS"><span>Customer Service</span></div></div>
+                <div class="role-item"><div class="left"><input type="checkbox" id="editRoleIT"><span>IT</span></div></div>
+              </div>
               </div>
             </div>
           </div>
@@ -502,6 +505,7 @@ async function adminPanelWire(mount) {
     newRoleAdmin: mount.querySelector('#newRoleAdmin'),
     newRoleInstructor: mount.querySelector('#newRoleInstructor'),
     newRoleCS: mount.querySelector('#newRoleCS'),
+    newRoleIT: mount.querySelector('#newRoleIT'),
     createUserBtn: mount.querySelector('#createUserBtn'),
 
     editUserName: mount.querySelector('#editUserName'),
@@ -513,6 +517,7 @@ async function adminPanelWire(mount) {
     editRoleAdmin: mount.querySelector('#editRoleAdmin'),
     editRoleInstructor: mount.querySelector('#editRoleInstructor'),
     editRoleCS: mount.querySelector('#editRoleCS'),
+    editRoleIT: mount.querySelector('#editRoleIT'),
 
     adminProgressFill: mount.querySelector('#adminProgressFill'),
     adminProgressText: mount.querySelector('#adminProgressText'),
