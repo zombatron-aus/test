@@ -156,3 +156,65 @@ button.danger:hover{background:#b91c1c}
 
 /* Admin: user search */
 .user-search{width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(0,180,216,0.18);background:rgba(255,255,255,0.85)}
+
+
+/* === IT Tools "Word-like" styling === */
+.it-word .card h2{letter-spacing:-0.02em}
+.it-word .input, .it-word select.input{
+  background:#fff;
+}
+.it-word .role-list .role-item{
+  background:#fff;
+  border:1px solid rgba(15,23,42,.10);
+}
+.it-word .progress-list .it-card{
+  background:#fff;
+}
+.rt-ribbon{
+  border:1px solid rgba(15,23,42,.10);
+  background:linear-gradient(180deg,#ffffff,#f8fafc);
+  border-radius:14px;
+  overflow:hidden;
+}
+.rt-tabs{
+  display:flex;
+  gap:10px;
+  padding:8px 12px;
+  border-bottom:1px solid rgba(15,23,42,.10);
+}
+.rt-tab{
+  font-size:13px;
+  font-weight:800;
+  color:var(--text);
+  opacity:.65;
+}
+.rt-tab.active{opacity:1}
+.rt-groups{
+  display:flex;
+  flex-wrap:wrap;
+  gap:16px;
+  padding:10px 12px;
+}
+.rt-group{display:flex;flex-direction:column;gap:6px;min-width:160px}
+.rt-buttons{display:flex;flex-wrap:wrap;gap:8px}
+.rt-btn{
+  border:1px solid rgba(15,23,42,.12);
+  background:#fff;
+  border-radius:10px;
+  padding:8px 10px;
+  font-weight:800;
+}
+.rt-btn:hover{background:rgba(3,105,161,.06)}
+.rt-label{font-size:12px;opacity:.75}
+.rt-editor{
+  background:#fff;
+  border:1px solid rgba(15,23,42,.12);
+  border-radius:14px;
+  padding:16px;
+  min-height:240px;
+  line-height:1.5;
+}
+.rt-page{
+  box-shadow:0 12px 30px rgba(2,132,199,.10);
+}
+.rt-editor img{max-width:100%;border-radius:12px}

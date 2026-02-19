@@ -870,7 +870,7 @@ async function itToolsInitInline(){
   const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : `m_${Math.random().toString(16).slice(2)}_${Date.now()}`);
 
   itTab.innerHTML = `
-    <div class="panel-grid">
+    <div class="panel-grid it-word">
       <div class="card">
         <h2>IT Tools</h2>
         <p class="muted">Create multi-page modules with rich text, media, styling, and an end-of-module quiz.</p>
@@ -936,7 +936,7 @@ async function itToolsInitInline(){
               <div class="muted" style="font-weight:900">Pages</div>
               <div class="muted">Add multiple pages. Staff will click Next/Back.</div>
             </div>
-            <button id="itAddPageBtn" class="btn ghost">+ Add Page</button>
+            <button id="itAddPageBtn" type="button" class="btn ghost">+ Add Page</button>
           </div>
           <div id="itPagesList" class="progress-list" style="margin-top:10px"></div>
         </div>
@@ -947,14 +947,14 @@ async function itToolsInitInline(){
               <div class="muted" style="font-weight:900">Quiz (optional)</div>
               <div class="muted">If added, quiz appears after the last page.</div>
             </div>
-            <button id="itAddQuestionBtn" class="btn ghost">+ Add Question</button>
+            <button id="itAddQuestionBtn" type="button" class="btn ghost">+ Add Question</button>
           </div>
           <div id="itQuizList" class="progress-list" style="margin-top:10px"></div>
         </div>
 
         <div class="form-row two">
-          <button id="itCreateBtn" class="btn primary wide">Create Module</button>
-          <button id="itClearBtn" class="btn ghost wide">Clear</button>
+          <button id="itCreateBtn" type="button" class="btn primary wide">Create Module</button>
+          <button id="itClearBtn" type="button" class="btn ghost wide">Clear</button>
         </div>
 
         <div id="itOk" class="ok"></div>
@@ -967,22 +967,30 @@ async function itToolsInitInline(){
         <div id="itExisting" class="progress-list"></div>
       </div>
     </div>
-
-    <style>
-      .rt-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
-      .rt-toolbar .btn{padding:8px 10px}
-      .rt-editor{min-height:160px;border:1px solid rgba(0,180,216,0.18);border-radius:14px;padding:12px;background:rgba(255,255,255,0.8)}
-      .it-mini{font-size:12px;opacity:0.8}
-      .it-row{display:flex;gap:10px;align-items:center;justify-content:space-between}
-      .it-row .left{display:flex;gap:10px;align-items:center}
-      .it-row .right{display:flex;gap:10px;align-items:center}
-      .it-chip{font-size:12px;padding:4px 8px;border-radius:999px;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7)}
-      .it-card{padding:12px;border-radius:14px;border:1px solid rgba(0,180,216,0.14);background:rgba(255,255,255,0.75)}
-      .it-card h4{margin:0 0 6px 0}
-      .it-inline{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-      .it-inline .input{flex:1;min-width:220px}
-      .it-mediaHint{font-size:12px;opacity:0.85;margin-top:6px}
-    </style>
+<style>
+  .rt-ribbon{border:1px solid rgba(2,132,199,.18);background:rgba(255,255,255,.92);border-radius:14px;overflow:hidden;margin:10px 0}
+  .rt-tabs{display:flex;gap:8px;padding:8px 12px;border-bottom:1px solid rgba(2,132,199,.14);background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(240,249,255,.9))}
+  .rt-tab{font-size:13px;font-weight:800;color:#0f172a;opacity:.7}
+  .rt-tab.active{opacity:1}
+  .rt-groups{display:flex;flex-wrap:wrap;gap:14px;padding:10px 12px}
+  .rt-group{display:flex;flex-direction:column;gap:6px;min-width:160px}
+  .rt-buttons{display:flex;flex-wrap:wrap;gap:8px}
+  .rt-btn{border:1px solid rgba(15,23,42,.12);background:#fff;border-radius:10px;padding:8px 10px;font-weight:800;cursor:pointer}
+  .rt-btn:hover{background:rgba(3,105,161,.06)}
+  .rt-label{font-size:12px;opacity:.75}
+  .rt-editor{min-height:220px;border:1px solid rgba(15,23,42,.12);border-radius:14px;padding:14px;background:#fff}
+  .rt-page{box-shadow:0 10px 30px rgba(2,132,199,.10)}
+  .it-mini{font-size:12px;opacity:0.8}
+  .it-row{display:flex;gap:10px;align-items:center;justify-content:space-between}
+  .it-row .left{display:flex;gap:10px;align-items:center}
+  .it-row .right{display:flex;gap:10px;align-items:center}
+  .it-chip{font-size:12px;padding:4px 8px;border-radius:999px;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7)}
+  .it-card{padding:12px;border-radius:14px;border:1px solid rgba(2,132,199,0.14);background:rgba(255,255,255,0.75)}
+  .it-card h4{margin:0 0 6px 0}
+  .it-inline{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .it-inline .input{flex:1;min-width:220px}
+  .it-mediaHint{font-size:12px;opacity:0.85;margin-top:6px}
+</style>
   `;
 
   const els = {
@@ -1122,17 +1130,44 @@ async function itToolsInitInline(){
 
       <div id="pRichWrap" class="form-row" style="${type==='richtext'?'':'display:none'}">
         <div class="muted" style="font-weight:800;margin-bottom:6px">Editor</div>
-        <div class="rt-toolbar">
-          <button class="btn ghost" data-cmd="bold"><b>B</b></button>
-          <button class="btn ghost" data-cmd="italic"><i>I</i></button>
-          <button class="btn ghost" data-cmd="underline"><u>U</u></button>
-          <button class="btn ghost" data-cmd="insertUnorderedList">• List</button>
-          <button class="btn ghost" data-cmd="insertOrderedList">1. List</button>
-          <button class="btn ghost" data-cmd="formatBlock" data-val="h2">H2</button>
-          <button class="btn ghost" data-cmd="formatBlock" data-val="h3">H3</button>
-          <button class="btn ghost" data-cmd="createLink">Link</button>
-          <button class="btn ghost" data-cmd="insertImage">Image URL</button>
-          <button class="btn ghost" data-cmd="removeFormat">Clear</button>
+        <div class="rt-ribbon">
+          <div class="rt-tabs">
+            <span class="rt-tab active">Home</span>
+            <span class="rt-tab">Insert</span>
+          </div>
+          <div class="rt-groups">
+            <div class="rt-group">
+              <div class="rt-buttons">
+                <button type="button" class="rt-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+                <button type="button" class="rt-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+                <button type="button" class="rt-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+              </div>
+              <div class="rt-label">Font style</div>
+            </div>
+            <div class="rt-group">
+              <div class="rt-buttons">
+                <button type="button" class="rt-btn" data-cmd="insertUnorderedList" title="Bullets">• List</button>
+                <button type="button" class="rt-btn" data-cmd="insertOrderedList" title="Numbered">1. List</button>
+              </div>
+              <div class="rt-label">Paragraph</div>
+            </div>
+            <div class="rt-group">
+              <div class="rt-buttons">
+                <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="p" title="Normal">Normal</button>
+                <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="h2" title="Heading 2">H2</button>
+                <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="h3" title="Heading 3">H3</button>
+              </div>
+              <div class="rt-label">Styles</div>
+            </div>
+            <div class="rt-group">
+              <div class="rt-buttons">
+                <button type="button" class="rt-btn" data-cmd="createLink" title="Insert link">Link</button>
+                <button type="button" class="rt-btn" data-cmd="insertImage" title="Insert image by URL">Image</button>
+                <button type="button" class="rt-btn" data-cmd="removeFormat" title="Clear formatting">Clear</button>
+              </div>
+              <div class="rt-label">Insert</div>
+            </div>
+          </div>
         </div>
         <div id="pEditor" class="rt-editor" contenteditable="true"></div>
         <div class="it-mini">Tip: You can paste text, add headings, lists, and images via URL.</div>
@@ -1262,7 +1297,7 @@ async function itToolsInitInline(){
     });
   };
 
-  els.addPageBtn.addEventListener('click', () => addOrEditPage());
+  els.addPageBtn.addEventListener('click', (e) => { e.preventDefault(); try { addOrEditPage(); } catch(err){ els.err.textContent = err?.message || String(err); } });
   els.pagesList.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
@@ -1278,7 +1313,7 @@ async function itToolsInitInline(){
     }
   });
 
-  els.addQBtn.addEventListener('click', () => addOrEditQuestion());
+  els.addQBtn.addEventListener('click', (e) => { e.preventDefault(); try { addOrEditQuestion(); } catch(err){ els.err.textContent = err?.message || String(err); } });
   els.quizList.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
