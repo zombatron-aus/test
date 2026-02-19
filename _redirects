@@ -1,10 +1,16 @@
 # Pretty URLs (rewrite, no redirect loops)
-/dashboard    /dashboard.html    200
-/admin        /admin.html        200
-/it           /it.html           200
-/module       /module.html       200
-/quiz         /quiz.html         200
-/set-password /set-password.html 200
+/dashboard      /dashboard.html      200
+/dashboard/     /dashboard.html      200
+/admin          /admin.html          200
+/admin/         /admin.html          200
+/it             /it.html             200
+/it/            /it.html             200
+/module         /module.html         200
+/module/        /module.html         200
+/quiz           /quiz.html           200
+/quiz/          /quiz.html           200
+/set-password   /set-password.html   200
+/set-password/  /set-password.html   200
 
-# Never serve source from /functions
-/functions/*  /404.html          200
+# Never serve source from /functions (Pages redirects only support 200/3xx)
+/functions/*    /404.html            200
