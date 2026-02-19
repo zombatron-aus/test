@@ -116,6 +116,8 @@ async function dashboardInit() {
   const adminTab = document.getElementById('adminTab');
   const itTab = document.getElementById('itTab');
 
+  let __bwItToolsLoaded = false;
+
   function switchTab(tab) {
     trainingTab.classList.add('hidden');
     adminTab.classList.add('hidden');
@@ -142,7 +144,13 @@ async function dashboardInit() {
   }
 trainingTabBtn.addEventListener('click', () => switchTab('training'));
   adminTabBtn.addEventListener('click', () => switchTab('admin'));
-  if (itTabBtn) itTabBtn.addEventListener('click', () => switchTab('it'));
+  if (itTabBtn) itTabBtn.addEventListener('click', async () => {
+    switchTab('it');
+    if (!__bwItToolsLoaded) {
+      __bwItToolsLoaded = true;
+      try { await itToolsInitInline(); } catch(e) { console.error(e); }
+    }
+  });
   switchTab('training');
 
   const [mods, prog] = await Promise.all([API.get('/api/modules'), API.get('/api/progress')]);
@@ -391,6 +399,8 @@ async function adminPageInit() {
 async function adminPanelInitInline() {
   const adminTab = document.getElementById('adminTab');
   const itTab = document.getElementById('itTab');
+
+  let __bwItToolsLoaded = false;
   if (!adminTab) return;
   adminTab.innerHTML = `<div id="adminMount"></div>`;
   await adminPanelWire(document.getElementById('adminMount'));
@@ -679,6 +689,8 @@ async function adminPanelWire(mount) {
 
 async function itToolsInitInline(){
   const itTab = document.getElementById('itTab');
+
+  let __bwItToolsLoaded = false;
   if (!itTab) return;
   const me = await API.get('/api/me');
   if (!me.roles.includes('it')) return;
