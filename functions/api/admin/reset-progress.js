@@ -15,6 +15,7 @@ export async function onRequestPost({ request, env, data }) {
 
   const u = await loadUserById(env, id);
   if (!u) return json({ error:"User not found" }, 404);
+  if (!admin?.roles?.includes('it') && (u.roles || []).includes('it')) return json({ error: 'Forbidden' }, 403);
 
   u.progress = {};
   u.ack = {};

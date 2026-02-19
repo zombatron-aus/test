@@ -35,10 +35,15 @@ export async function onRequestGet({ request, env, data }) {
   for (const uid of index) {
     const u = await loadUserById(env, uid);
     if (!u) continue;
+    // Non-IT admins should not see IT accounts
+    if (!admin?.roles?.includes('it') && (u.roles || []).includes('it')) continue;
     const { percent } = computeUserProgress(u);
     out.push({ id: u.id, name: u.name, username: u.username, roles: u.roles || [], progressPercent: percent });
   }
-  out.sort((a,b)=> (b.roles.includes('admin') - a.roles.includes('admin')) || a.name.localeCompare(b.name));
+  out.sort((a,b)=>{
+    const w = (x)=> (x.roles.includes('it')?2:(x.roles.includes('admin')?1:0));
+    return (w(b)-w(a)) || a.name.localeCompare(b.name);
+  });
   return json({ users: out });
 }
 
@@ -52,6 +57,7 @@ export async function onRequestPost({ request, env, data }) {
   const username = (body.username || "").trim();
   const password = body.password || "";
   const roles = Array.isArray(body.roles) ? body.roles : [];
+  if (!admin?.roles?.includes('it') && roles.includes('it')) return json({ error: 'Forbidden' }, 403);
 
   if (!name || !username || !password) return json({ error:"Missing required fields" }, 400);
   if (!roles.length) return json({ error:"Select at least one role" }, 400);
@@ -84,11 +90,13 @@ export async function onRequestPut({ request, env, data }) {
 
   const u = await loadUserById(env, id);
   if (!u) return json({ error:"User not found" }, 404);
+  if (!admin?.roles?.includes('it') && (u.roles || []).includes('it')) return json({ error: 'Forbidden' }, 403);
 
   const name = (body.name || "").trim();
   const username = (body.username || "").trim();
   const password = (body.password || "");
   const roles = Array.isArray(body.roles) ? body.roles : [];
+  if (!admin?.roles?.includes('it') && roles.includes('it')) return json({ error: 'Forbidden' }, 403);
 
   if (!name || !username) return json({ error:"Missing required fields" }, 400);
   if (!roles.length) return json({ error:"Select at least one role" }, 400);

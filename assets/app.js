@@ -130,9 +130,17 @@ async function dashboardInit() {
   if (me.roles.includes('admin') || me.roles.includes('it')) {
     adminTabBtn.classList.remove('hidden');
   } else {
-    adminTabBtn.classList.add('hidden');  }
+    adminTabBtn.classList.add('hidden');
+  }
 
-  trainingTabBtn.addEventListener('click', () => switchTab('training'));
+  if (itTabBtn) {
+    if (me.roles.includes('it')) {
+      itTabBtn.classList.remove('hidden');
+    } else {
+      itTabBtn.classList.add('hidden');
+    }
+  }
+trainingTabBtn.addEventListener('click', () => switchTab('training'));
   adminTabBtn.addEventListener('click', () => switchTab('admin'));
   if (itTabBtn) itTabBtn.addEventListener('click', () => switchTab('it'));
   switchTab('training');
@@ -375,7 +383,7 @@ async function quizInit() {
 
 async function adminPageInit() {
   const me = await guard(); if (!me) return;
-  if (!me.roles.includes('admin')) { location.href = 'dashboard.html'; return; }
+  if (!(me.roles.includes('admin') || me.roles.includes('it'))) { location.href = 'dashboard.html'; return; }
   await topbarInit(me);
   await adminPanelInitStandalone();
 }
@@ -401,6 +409,7 @@ async function adminPanelInitStandalone() {
 }
 
 async function adminPanelWire(mount) {
+  const me = await API.get('/api/me');
   mount.innerHTML = `
     <div class="grid">
       <div class="card">
@@ -492,6 +501,14 @@ async function adminPanelWire(mount) {
     </div>
   `;
 
+  // Admins cannot assign or edit IT role/accounts (IT role manages itself)
+  const canManageIT = me.roles.includes('it');
+  // Hide IT role checkboxes if not IT
+  const itNew = mount.querySelector('#newRoleIT');
+  if (itNew && !canManageIT) itNew.closest('.role-item')?.classList.add('hidden');
+  const itEdit = mount.querySelector('#editRoleIT');
+  if (itEdit && !canManageIT) itEdit.closest('.role-item')?.classList.add('hidden');
+
   const els = {
     userList: mount.querySelector('#userList'),
     userSearch: mount.querySelector('#userSearch'),
@@ -553,7 +570,8 @@ async function adminPanelWire(mount) {
     const out = await API.get('/api/admin/users');
     els.userList.innerHTML = '';
     const q = (els.userSearch?.value || '').toLowerCase().trim();
-    const users = q ? out.users.filter(u => (u.name||'').toLowerCase().includes(q) || (u.username||'').toLowerCase().includes(q)) : out.users;
+    let users = q ? out.users.filter(u => (u.name||'').toLowerCase().includes(q) || (u.username||'').toLowerCase().includes(q)) : out.users;
+    if (!me.roles.includes('it')) users = users.filter(u => !(u.roles||[]).includes('it'));
     users.forEach(u => {
       const row = document.createElement('div');
       row.className = 'item';
