@@ -222,7 +222,95 @@ async function moduleInit() {
   const host = document.getElementById('pageHost');
   host.innerHTML = '';
 
-  if (m.id === 'vision') {
+
+  // Custom modules created via IT Tools (multi-page, rich content)
+  if (m.custom) {
+    // apply style if provided
+    const style = m.style || {};
+    const fontFamily = style.fontFamily || "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+    const baseFontPx = Number(style.baseFontPx || 16);
+    const textColor = style.textColor || "#0f172a";
+    const accentColor = style.accentColor || "var(--primary)";
+
+    const pages = Array.isArray(m.pages) && m.pages.length ? m.pages : [{
+      id: "p1", type: "richtext", title: m.title, html: (m.content || "").replaceAll("\n","<br>")
+    }];
+
+    let pageIdx = 0;
+
+    const renderPage = () => {
+      const p = pages[pageIdx];
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.fontFamily = fontFamily;
+      card.style.fontSize = `${baseFontPx}px`;
+      card.style.color = textColor;
+
+      const header = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px">
+          <div>
+            <h2 style="margin:0;color:${accentColor}">${escapeHtml(m.title)}</h2>
+            <div class="muted" style="margin-top:6px">${escapeHtml(p.title || '')}</div>
+          </div>
+          <div class="muted">${pageIdx+1} / ${pages.length}</div>
+        </div>
+        <div class="progress" style="margin-top:12px"><div class="bar" style="width:${Math.round(((pageIdx+1)/pages.length)*100)}%"></div></div>
+      `;
+
+      let body = '';
+      if (p.type === 'media') {
+        const u = p.url || '';
+        if ((p.mediaType || 'image') === 'video') {
+          body = `<div style="margin-top:14px">
+            <div style="position:relative;padding-top:56.25%;border-radius:14px;overflow:hidden;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7)">
+              <iframe src="${escapeHtml(u)}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            </div>
+            ${p.caption ? `<div class="muted" style="margin-top:10px">${escapeHtml(p.caption)}</div>` : ``}
+          </div>`;
+        } else {
+          body = `<div style="margin-top:14px">
+            <img src="${escapeHtml(u)}" alt="" style="width:100%;max-height:520px;object-fit:contain;border-radius:14px;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7)">
+            ${p.caption ? `<div class="muted" style="margin-top:10px">${escapeHtml(p.caption)}</div>` : ``}
+          </div>`;
+        }
+      } else {
+        body = `<div style="margin-top:14px">${p.html || ''}</div>`;
+      }
+
+      const nav = document.createElement('div');
+      nav.className = 'row';
+      nav.style.marginTop = '14px';
+      nav.innerHTML = `
+        <div><button class="secondary" id="custBack" style="width:100%" ${pageIdx===0?'disabled':''}>Back</button></div>
+        <div><button id="custNext" style="width:100%">${pageIdx===pages.length-1 ? (m.quiz ? 'Acknowledge & Start Quiz' : 'Acknowledge & Finish') : 'Next'}</button></div>
+      `;
+
+      card.innerHTML = header + body;
+      host.innerHTML = '';
+      host.appendChild(card);
+      host.appendChild(nav);
+
+      nav.querySelector('#custBack').addEventListener('click', () => {
+        if (pageIdx>0) { pageIdx--; renderPage(); }
+      });
+
+      nav.querySelector('#custNext').addEventListener('click', async () => {
+        if (pageIdx < pages.length-1) { pageIdx++; renderPage(); return; }
+        // last page: acknowledge
+        await API.post('/api/ack', { moduleId });
+        if (m.quiz) {
+          location.href = `quiz.html?id=${encodeURIComponent(moduleId)}`;
+        } else {
+          await API.post('/api/complete-module', { moduleId });
+          showOverlay('Completed', 'Module completed.', 1400);
+          setTimeout(() => location.href = 'dashboard.html', 450);
+        }
+      });
+    };
+
+    renderPage();
+    return;
+  }  if (m.id === 'vision') {
     const wrap = document.createElement('div');
     wrap.className = 'card vision-shell';
     wrap.innerHTML = `
@@ -344,6 +432,88 @@ async function quizInit() {
   const mods = await API.get('/api/modules');
   const m = mods.find(x => x.id === moduleId);
   if (!m || !m.quiz) { location.href = 'dashboard.html'; return; }
+
+  // New quiz schema (multi-question)
+  if (m.quiz.questions && Array.isArray(m.quiz.questions)) {
+    const host = document.getElementById('pageHost');
+    host.innerHTML = '';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'card';
+    wrap.innerHTML = `
+      <h2 style="color:var(--primary)">${escapeHtml(m.title)} – Quiz</h2>
+      <p class="muted" style="margin-bottom:12px">You must score 100% to pass.</p>
+      <div id="quizQs"></div>
+      <div class="row" style="margin-top:14px">
+        <div><button class="secondary" id="quizBackBtn" style="width:100%">Back</button></div>
+        <div><button id="quizSubmitBtn" style="width:100%">Submit</button></div>
+      </div>
+      <div class="error" id="quizErr"></div>
+    `;
+    host.appendChild(wrap);
+
+    const qsHost = wrap.querySelector('#quizQs');
+    const err = wrap.querySelector('#quizErr');
+
+    // render questions with randomized answer order
+    const rendered = m.quiz.questions.map((q, qi) => {
+      const answers = (q.answers || []).map(a => ({...a}));
+      for (let i = answers.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [answers[i], answers[j]] = [answers[j], answers[i]];
+      }
+      const qWrap = document.createElement('div');
+      qWrap.className = 'it-card';
+      qWrap.style.marginBottom = '12px';
+      qWrap.innerHTML = `
+        <div style="font-weight:900;margin-bottom:8px">${qi+1}. ${escapeHtml(q.prompt)}</div>
+        <div class="progress-list" style="margin-top:0"></div>
+      `;
+      const list = qWrap.querySelector('.progress-list');
+      answers.forEach(a => {
+        const lab = document.createElement('label');
+        lab.className = 'quiz-opt';
+        lab.style.display='flex';
+        lab.style.gap='10px';
+        lab.style.alignItems='center';
+        lab.style.padding='8px 10px';
+        lab.style.borderRadius='12px';
+        lab.style.border='1px solid rgba(0,0,0,0.08)';
+        lab.style.background='rgba(255,255,255,0.75)';
+        lab.innerHTML = `<input type="radio" name="q${qi}" value="${escapeHtml(a.id)}"> <span>${escapeHtml(a.text)}</span>`;
+        list.appendChild(lab);
+      });
+      qsHost.appendChild(qWrap);
+      return { q, answers };
+    });
+
+    wrap.querySelector('#quizBackBtn').addEventListener('click', () => {
+      location.href = `module.html?id=${encodeURIComponent(moduleId)}`;
+    });
+
+    wrap.querySelector('#quizSubmitBtn').addEventListener('click', async () => {
+      err.textContent='';
+      const picked = rendered.map((_, qi) => wrap.querySelector(`input[name="q${qi}"]:checked`)?.value || null);
+      if (picked.some(v => !v)) { err.textContent = 'Please answer every question.'; return; }
+
+      let correct = 0;
+      rendered.forEach((r, qi) => {
+        if (picked[qi] === r.q.correctAnswerId) correct++;
+      });
+      const score = Math.round((correct / rendered.length) * 100);
+
+      if (score === 100) {
+        await API.post('/api/complete-module', { moduleId });
+        showOverlay('Nice work!', 'Quiz passed — module completed.', 1500);
+        setTimeout(() => location.href = 'dashboard.html', 450);
+      } else {
+        err.textContent = `You must score 100% to pass. You scored ${score}%. Try again.`;
+      }
+    });
+
+    return;
+  }
+
 
   const indices = m.quiz.opts.map((_, idx) => idx);
   for (let i = indices.length - 1; i > 0; i--) {
@@ -688,14 +858,542 @@ async function adminPanelWire(mount) {
 
 
 async function itToolsInitInline(){
-  const itTab = document.getElementById('itTab');
 
-  let __bwItToolsLoaded = false;
-  if (!itTab) return;
   const me = await API.get('/api/me');
-  if (!me.roles.includes('it')) return;
-  itTab.innerHTML = `<div id="itMount"></div>`;
-  await itToolsWire(document.getElementById('itMount'));
+  if (!me.roles.includes('it')) {
+    itTab.innerHTML = `<div class="card"><h2>IT Tools</h2><div class="error">Forbidden</div></div>`;
+    return;
+  }
+
+  // Simple rich text helpers (execCommand is deprecated but still widely supported in browsers)
+  const cmd = (c, v=null) => { try { document.execCommand(c, false, v); } catch(e){} };
+  const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : `m_${Math.random().toString(16).slice(2)}_${Date.now()}`);
+
+  itTab.innerHTML = `
+    <div class="panel-grid">
+      <div class="card">
+        <h2>IT Tools</h2>
+        <p class="muted">Create multi-page modules with rich text, media, styling, and an end-of-module quiz.</p>
+
+        <div class="form-row">
+          <label class="label">Title</label>
+          <input id="itModTitle" class="input" placeholder="e.g., Pool Safety">
+        </div>
+
+        <div class="form-row">
+          <label class="label">Description</label>
+          <input id="itModDesc" class="input" placeholder="Shown on the dashboard">
+        </div>
+
+        <div class="form-row">
+          <div class="muted" style="font-weight:800;margin-bottom:8px">Roles (tick all that apply)</div>
+          <div class="role-list">
+            <div class="role-item"><div class="left"><input type="checkbox" id="itRoleInstructor"><span>Instructor</span></div></div>
+            <div class="role-item"><div class="left"><input type="checkbox" id="itRoleCS"><span>Customer Service</span></div></div>
+            <div class="role-item"><div class="left"><input type="checkbox" id="itRoleAdmin"><span>Admin</span></div></div>
+            <div class="role-item"><div class="left"><input type="checkbox" id="itRoleIT"><span>IT</span></div></div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="muted" style="font-weight:800;margin-bottom:8px">Module styling</div>
+          <div class="form-row two">
+            <div>
+              <label class="label">Font</label>
+              <select id="itFont" class="input">
+                <option value="system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif">System</option>
+                <option value="Arial, Helvetica, sans-serif">Arial</option>
+                <option value="Georgia, serif">Georgia</option>
+                <option value="Trebuchet MS, Arial, sans-serif">Trebuchet</option>
+                <option value="Verdana, Arial, sans-serif">Verdana</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Base size</label>
+              <select id="itFontSize" class="input">
+                <option value="14">14px</option>
+                <option value="16" selected>16px</option>
+                <option value="18">18px</option>
+                <option value="20">20px</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row two">
+            <div>
+              <label class="label">Text colour</label>
+              <input id="itTextColor" class="input" type="color" value="#0f172a">
+            </div>
+            <div>
+              <label class="label">Accent colour</label>
+              <input id="itAccentColor" class="input" type="color" value="#06b6d4">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <div>
+              <div class="muted" style="font-weight:900">Pages</div>
+              <div class="muted">Add multiple pages. Staff will click Next/Back.</div>
+            </div>
+            <button id="itAddPageBtn" class="btn ghost">+ Add Page</button>
+          </div>
+          <div id="itPagesList" class="progress-list" style="margin-top:10px"></div>
+        </div>
+
+        <div class="form-row">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <div>
+              <div class="muted" style="font-weight:900">Quiz (optional)</div>
+              <div class="muted">If added, quiz appears after the last page.</div>
+            </div>
+            <button id="itAddQuestionBtn" class="btn ghost">+ Add Question</button>
+          </div>
+          <div id="itQuizList" class="progress-list" style="margin-top:10px"></div>
+        </div>
+
+        <div class="form-row two">
+          <button id="itCreateBtn" class="btn primary wide">Create Module</button>
+          <button id="itClearBtn" class="btn ghost wide">Clear</button>
+        </div>
+
+        <div id="itOk" class="ok"></div>
+        <div id="itErr" class="error"></div>
+      </div>
+
+      <div class="card">
+        <h2>Existing Custom Modules</h2>
+        <p class="muted">These are modules created via IT Tools. (Built-in modules are separate.)</p>
+        <div id="itExisting" class="progress-list"></div>
+      </div>
+    </div>
+
+    <style>
+      .rt-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+      .rt-toolbar .btn{padding:8px 10px}
+      .rt-editor{min-height:160px;border:1px solid rgba(0,180,216,0.18);border-radius:14px;padding:12px;background:rgba(255,255,255,0.8)}
+      .it-mini{font-size:12px;opacity:0.8}
+      .it-row{display:flex;gap:10px;align-items:center;justify-content:space-between}
+      .it-row .left{display:flex;gap:10px;align-items:center}
+      .it-row .right{display:flex;gap:10px;align-items:center}
+      .it-chip{font-size:12px;padding:4px 8px;border-radius:999px;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7)}
+      .it-card{padding:12px;border-radius:14px;border:1px solid rgba(0,180,216,0.14);background:rgba(255,255,255,0.75)}
+      .it-card h4{margin:0 0 6px 0}
+      .it-inline{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+      .it-inline .input{flex:1;min-width:220px}
+      .it-mediaHint{font-size:12px;opacity:0.85;margin-top:6px}
+    </style>
+  `;
+
+  const els = {
+    title: document.getElementById('itModTitle'),
+    desc: document.getElementById('itModDesc'),
+    roleInstructor: document.getElementById('itRoleInstructor'),
+    roleCS: document.getElementById('itRoleCS'),
+    roleAdmin: document.getElementById('itRoleAdmin'),
+    roleIT: document.getElementById('itRoleIT'),
+    font: document.getElementById('itFont'),
+    fontSize: document.getElementById('itFontSize'),
+    textColor: document.getElementById('itTextColor'),
+    accentColor: document.getElementById('itAccentColor'),
+    addPageBtn: document.getElementById('itAddPageBtn'),
+    pagesList: document.getElementById('itPagesList'),
+    addQBtn: document.getElementById('itAddQuestionBtn'),
+    quizList: document.getElementById('itQuizList'),
+    createBtn: document.getElementById('itCreateBtn'),
+    clearBtn: document.getElementById('itClearBtn'),
+    ok: document.getElementById('itOk'),
+    err: document.getElementById('itErr'),
+    existing: document.getElementById('itExisting')
+  };
+
+  const state = {
+    pages: [],
+    quiz: []
+  };
+
+  const renderPages = () => {
+    els.pagesList.innerHTML = state.pages.map((p, idx) => `
+      <div class="it-card">
+        <div class="it-row">
+          <div class="left">
+            <span class="it-chip">Page ${idx+1}</span>
+            <strong>${escapeHtml(p.title || 'Untitled')}</strong>
+            <span class="it-mini">${escapeHtml(p.type)}</span>
+          </div>
+          <div class="right">
+            <button class="btn ghost" data-act="editPage" data-id="${p.id}">Edit</button>
+            <button class="btn danger" data-act="delPage" data-id="${p.id}">Delete</button>
+          </div>
+        </div>
+        ${p.type === 'media' ? `<div class="it-mediaHint">Media: ${escapeHtml(p.mediaType || '')} • ${escapeHtml(p.url || '')}</div>` : ``}
+      </div>
+    `).join('') || `<div class="muted">No pages yet. Click “Add Page”.</div>`;
+  };
+
+  const renderQuiz = () => {
+    els.quizList.innerHTML = state.quiz.map((q, qi) => `
+      <div class="it-card">
+        <div class="it-row">
+          <div class="left">
+            <span class="it-chip">Q${qi+1}</span>
+            <strong>${escapeHtml(q.prompt || 'Untitled question')}</strong>
+          </div>
+          <div class="right">
+            <button class="btn ghost" data-act="editQ" data-id="${q.id}">Edit</button>
+            <button class="btn danger" data-act="delQ" data-id="${q.id}">Delete</button>
+          </div>
+        </div>
+        <div class="muted">${(q.answers||[]).length} answers • correct: ${(q.correctIndex??0)+1}</div>
+      </div>
+    `).join('') || `<div class="muted">No quiz questions. (Optional)</div>`;
+  };
+
+  const modal = (title, innerHtml, onSave) => {
+    const overlay = document.createElement('div');
+    overlay.style.position='fixed';
+    overlay.style.inset='0';
+    overlay.style.background='rgba(0,0,0,0.35)';
+    overlay.style.display='flex';
+    overlay.style.alignItems='center';
+    overlay.style.justifyContent='center';
+    overlay.style.padding='20px';
+    overlay.style.zIndex='9999';
+
+    const box = document.createElement('div');
+    box.className='card';
+    box.style.maxWidth='900px';
+    box.style.width='100%';
+    box.style.maxHeight='85vh';
+    box.style.overflow='auto';
+    box.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <h2 style="margin:0">${escapeHtml(title)}</h2>
+        <button class="btn ghost" id="itModalClose">Close</button>
+      </div>
+      <div style="margin-top:12px">${innerHtml}</div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+        <button class="btn ghost" id="itModalCancel">Cancel</button>
+        <button class="btn primary" id="itModalSave">Save</button>
+      </div>
+      <div class="error" id="itModalErr"></div>
+    `;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    box.querySelector('#itModalClose').addEventListener('click', close);
+    box.querySelector('#itModalCancel').addEventListener('click', close);
+    box.querySelector('#itModalSave').addEventListener('click', async () => {
+      const errEl = box.querySelector('#itModalErr');
+      errEl.textContent='';
+      try {
+        await onSave({ box, close, errEl });
+      } catch (e) {
+        errEl.textContent = e.message || 'Failed';
+      }
+    });
+    return box;
+  };
+
+  const addOrEditPage = (existing=null) => {
+    const id = existing?.id || uid();
+    const type = existing?.type || 'richtext';
+    const pageTitle = existing?.title || '';
+    const html = existing?.html || '';
+    const mediaType = existing?.mediaType || 'image';
+    const url = existing?.url || '';
+    const caption = existing?.caption || '';
+
+    const box = modal(existing ? 'Edit Page' : 'Add Page', `
+      <div class="form-row two">
+        <div>
+          <label class="label">Page title</label>
+          <input id="pTitle" class="input" value="${escapeHtml(pageTitle)}" placeholder="e.g., Safe Supervision">
+        </div>
+        <div>
+          <label class="label">Page type</label>
+          <select id="pType" class="input">
+            <option value="richtext" ${type==='richtext'?'selected':''}>Rich text</option>
+            <option value="media" ${type==='media'?'selected':''}>Media (image/video)</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="pRichWrap" class="form-row" style="${type==='richtext'?'':'display:none'}">
+        <div class="muted" style="font-weight:800;margin-bottom:6px">Editor</div>
+        <div class="rt-toolbar">
+          <button class="btn ghost" data-cmd="bold"><b>B</b></button>
+          <button class="btn ghost" data-cmd="italic"><i>I</i></button>
+          <button class="btn ghost" data-cmd="underline"><u>U</u></button>
+          <button class="btn ghost" data-cmd="insertUnorderedList">• List</button>
+          <button class="btn ghost" data-cmd="insertOrderedList">1. List</button>
+          <button class="btn ghost" data-cmd="formatBlock" data-val="h2">H2</button>
+          <button class="btn ghost" data-cmd="formatBlock" data-val="h3">H3</button>
+          <button class="btn ghost" data-cmd="createLink">Link</button>
+          <button class="btn ghost" data-cmd="insertImage">Image URL</button>
+          <button class="btn ghost" data-cmd="removeFormat">Clear</button>
+        </div>
+        <div id="pEditor" class="rt-editor" contenteditable="true"></div>
+        <div class="it-mini">Tip: You can paste text, add headings, lists, and images via URL.</div>
+      </div>
+
+      <div id="pMediaWrap" class="form-row" style="${type==='media'?'':'display:none'}">
+        <div class="form-row two">
+          <div>
+            <label class="label">Media type</label>
+            <select id="pMediaType" class="input">
+              <option value="image" ${mediaType==='image'?'selected':''}>Image (URL)</option>
+              <option value="video" ${mediaType==='video'?'selected':''}>Video (YouTube/Vimeo/embed URL)</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">URL</label>
+            <input id="pUrl" class="input" value="${escapeHtml(url)}" placeholder="https://...">
+          </div>
+        </div>
+        <div class="form-row">
+          <label class="label">Caption (optional)</label>
+          <input id="pCaption" class="input" value="${escapeHtml(caption)}" placeholder="Shown under the media">
+        </div>
+        <div class="it-mini">Images and videos must be hosted somewhere accessible via URL.</div>
+      </div>
+    `, async ({ box, close, errEl }) => {
+      const t = box.querySelector('#pTitle').value.trim();
+      const ty = box.querySelector('#pType').value;
+      if (!t) throw new Error('Page title is required.');
+      let page = { id, type: ty, title: t };
+
+      if (ty === 'richtext') {
+        const ed = box.querySelector('#pEditor');
+        const htmlOut = (ed.innerHTML || '').trim();
+        if (!htmlOut) throw new Error('Page content is required.');
+        page.html = htmlOut;
+      } else {
+        const mt = box.querySelector('#pMediaType').value;
+        const u = box.querySelector('#pUrl').value.trim();
+        if (!u) throw new Error('Media URL is required.');
+        page.mediaType = mt;
+        page.url = u;
+        page.caption = box.querySelector('#pCaption').value.trim();
+      }
+
+      const i = state.pages.findIndex(x => x.id === id);
+      if (i >= 0) state.pages[i] = page;
+      else state.pages.push(page);
+      renderPages();
+      close();
+    });
+
+    // Wire editor
+    const pTypeSel = box.querySelector('#pType');
+    const richWrap = box.querySelector('#pRichWrap');
+    const mediaWrap = box.querySelector('#pMediaWrap');
+    const editor = box.querySelector('#pEditor');
+    if (editor) editor.innerHTML = html || '';
+
+    pTypeSel.addEventListener('change', () => {
+      const v = pTypeSel.value;
+      richWrap.style.display = v === 'richtext' ? '' : 'none';
+      mediaWrap.style.display = v === 'media' ? '' : 'none';
+    });
+
+    box.querySelectorAll('[data-cmd]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const c = btn.getAttribute('data-cmd');
+        const val = btn.getAttribute('data-val');
+        if (c === 'createLink') {
+          const url = prompt('Link URL:');
+          if (url) cmd('createLink', url);
+          return;
+        }
+        if (c === 'insertImage') {
+          const url = prompt('Image URL:');
+          if (url) cmd('insertImage', url);
+          return;
+        }
+        if (c === 'formatBlock') {
+          cmd('formatBlock', val);
+          return;
+        }
+        cmd(c);
+      });
+    });
+  };
+
+  const addOrEditQuestion = (existing=null) => {
+    const id = existing?.id || uid();
+    const promptTxt = existing?.prompt || '';
+    const answers = existing?.answers || ['', '', '', ''];
+    const correctIndex = existing?.correctIndex ?? 0;
+
+    const box = modal(existing ? 'Edit Question' : 'Add Question', `
+      <div class="form-row">
+        <label class="label">Question</label>
+        <input id="qPrompt" class="input" value="${escapeHtml(promptTxt)}" placeholder="e.g., How often do we test pool water?">
+      </div>
+      <div class="form-row">
+        <div class="muted" style="font-weight:800;margin-bottom:6px">Answers (pick the correct one)</div>
+        <div class="progress-list" style="margin-top:0">
+          ${answers.map((a, i) => `
+            <div class="it-card">
+              <div class="it-inline">
+                <input type="radio" name="qCorrect" value="${i}" ${i===correctIndex?'checked':''}>
+                <input id="qA${i}" class="input" value="${escapeHtml(a)}" placeholder="Answer ${i+1}">
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `, async ({ box, close }) => {
+      const p = box.querySelector('#qPrompt').value.trim();
+      if (!p) throw new Error('Question text is required.');
+      const ans = [0,1,2,3].map(i => box.querySelector(`#qA${i}`).value.trim());
+      if (ans.some(a => !a)) throw new Error('All 4 answers are required.');
+      const ci = Number(box.querySelector('input[name="qCorrect"]:checked')?.value ?? 0);
+      const q = { id, prompt: p, answers: ans, correctIndex: ci };
+
+      const i = state.quiz.findIndex(x => x.id === id);
+      if (i >= 0) state.quiz[i] = q;
+      else state.quiz.push(q);
+      renderQuiz();
+      close();
+    });
+  };
+
+  els.addPageBtn.addEventListener('click', () => addOrEditPage());
+  els.pagesList.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const act = btn.getAttribute('data-act');
+    const id = btn.getAttribute('data-id');
+    const page = state.pages.find(p => p.id === id);
+    if (!page) return;
+    if (act === 'editPage') return addOrEditPage(page);
+    if (act === 'delPage') {
+      if (!confirm('Delete this page?')) return;
+      state.pages = state.pages.filter(p => p.id !== id);
+      renderPages();
+    }
+  });
+
+  els.addQBtn.addEventListener('click', () => addOrEditQuestion());
+  els.quizList.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const act = btn.getAttribute('data-act');
+    const id = btn.getAttribute('data-id');
+    const q = state.quiz.find(x => x.id === id);
+    if (!q) return;
+    if (act === 'editQ') return addOrEditQuestion(q);
+    if (act === 'delQ') {
+      if (!confirm('Delete this question?')) return;
+      state.quiz = state.quiz.filter(x => x.id !== id);
+      renderQuiz();
+    }
+  });
+
+  const clearAll = () => {
+    els.title.value = '';
+    els.desc.value = '';
+    els.roleInstructor.checked = false;
+    els.roleCS.checked = false;
+    els.roleAdmin.checked = false;
+    els.roleIT.checked = false;
+    els.font.value = "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+    els.fontSize.value = "16";
+    els.textColor.value = "#0f172a";
+    els.accentColor.value = "#06b6d4";
+    state.pages = [];
+    state.quiz = [];
+    renderPages();
+    renderQuiz();
+  };
+
+  els.clearBtn.addEventListener('click', () => {
+    if (!confirm('Clear the builder?')) return;
+    clearAll();
+    els.ok.textContent = '';
+    els.err.textContent = '';
+  });
+
+  const refreshExisting = async () => {
+    try {
+      const out = await API.get('/api/it/modules');
+      els.existing.innerHTML = (out.modules || []).map(m => `
+        <div class="progress-item">
+          <div>
+            <div style="font-weight:900">${escapeHtml(m.title)}</div>
+            <div class="muted">${escapeHtml(m.desc || '')}</div>
+            <div class="muted">Roles: ${(m.roles||[]).map(roleLabel).join(', ')}</div>
+          </div>
+          <div class="pill pending">CUSTOM</div>
+        </div>
+      `).join('') || `<div class="muted">No custom modules yet.</div>`;
+    } catch (e) {
+      els.existing.innerHTML = `<div class="error">${escapeHtml(e.message||'Failed to load')}</div>`;
+    }
+  };
+
+  els.createBtn.addEventListener('click', async () => {
+    els.ok.textContent='';
+    els.err.textContent='';
+    els.createBtn.disabled = true;
+    try {
+      const title = els.title.value.trim();
+      if (!title) throw new Error('Title is required.');
+      if (state.pages.length === 0) throw new Error('Add at least one page.');
+
+      const roles = [];
+      if (els.roleInstructor.checked) roles.push('instructor');
+      if (els.roleCS.checked) roles.push('cs');
+      if (els.roleAdmin.checked) roles.push('admin');
+      if (els.roleIT.checked) roles.push('it');
+      if (roles.length === 0) throw new Error('Select at least one role.');
+
+      const style = {
+        fontFamily: els.font.value,
+        baseFontPx: Number(els.fontSize.value || 16),
+        textColor: els.textColor.value,
+        accentColor: els.accentColor.value
+      };
+
+      // Convert quiz to API format (answers with ids + correct answer id)
+      let quiz = null;
+      if (state.quiz.length > 0) {
+        quiz = {
+          title: `${title} Quiz`,
+          questions: state.quiz.map((q) => ({
+            prompt: q.prompt,
+            answers: q.answers.map((t, i) => ({ id: `a${i+1}`, text: t })),
+            correctAnswerId: `a${q.correctIndex+1}`
+          }))
+        };
+      }
+
+      await API.post('/api/it/modules', {
+        title,
+        desc: els.desc.value.trim(),
+        roles,
+        style,
+        pages: state.pages,
+        quiz
+      });
+
+      els.ok.textContent = 'Module created.';
+      clearAll();
+      await refreshExisting();
+    } catch (e) {
+      els.err.textContent = e.message || 'Failed';
+    } finally {
+      els.createBtn.disabled = false;
+    }
+  });
+
+  renderPages();
+  renderQuiz();
+  await refreshExisting();
 }
 
 function slugify(s){

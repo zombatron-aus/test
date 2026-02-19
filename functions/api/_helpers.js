@@ -224,13 +224,23 @@ export async function getAllModules(env){
 export async function saveCustomModule(env, module){
   const all = await getCustomModules(env);
   const next = all.filter(m => m.id !== module.id);
+
   next.push({
     id: module.id,
     title: module.title,
+    desc: module.desc || "",
     roles: module.roles,
-    type: 'content',
-    content: module.content
+    custom: true,
+
+    // v2 schema
+    pages: Array.isArray(module.pages) ? module.pages : [],
+    style: module.style || null,
+    quiz: module.quiz || null,
+
+    // legacy fallback (used if pages empty)
+    content: module.content || ""
   });
+
   await env.BW_LMS.put('modules:custom', JSON.stringify(next));
   return { ok:true };
 }
