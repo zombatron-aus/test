@@ -1,10 +1,10 @@
-# Pretty URLs
-/dashboard    /dashboard.html   302
-/admin        /admin.html       302
-/it           /it.html          302
-/module       /module.html      302
-/quiz         /quiz.html        302
-/set-password /set-password.html 302
+# Pretty URLs (rewrite, no redirect loops)
+/dashboard    /dashboard.html    200
+/admin        /admin.html        200
+/it           /it.html           200
+/module       /module.html       200
+/quiz         /quiz.html         200
+/set-password /set-password.html 200
 
 # Never serve source from /functions
-/functions/*  /404.html         404
+/functions/*  /404.html          404
