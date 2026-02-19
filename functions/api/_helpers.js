@@ -160,8 +160,9 @@ export async function authUser(env, request) {
   return u || null;
 }
 
-export function canAccessModule(user, moduleId) {
-  const m = MODULES.find(x => x.id === moduleId);
+export async function canAccessModule(env, user, moduleId) {
+  const mods = await getAllModules(env);
+  const m = mods.find(x => x.id === moduleId);
   if (!m) return { ok:false, reason:"Module not found" };
   const roles = user.roles || [];
   const roleOk = m.roles.some(r => roles.includes(r));
@@ -186,4 +187,50 @@ export async function rotateSession(env, oldToken, userId){
   const newToken = crypto.randomUUID();
   await env.BW_LMS.put(`session:${newToken}`, userId, { expirationTtl: 60*60*24 });
   return newToken;
+}
+
+
+export function requireRole(user, roles){
+  const have = user?.roles || [];
+  const ok = roles.some(r => have.includes(r));
+  if (!ok) {
+    const err = new Error('Forbidden');
+    err.status = 403;
+    throw err;
+  }
+}
+
+
+export async function getCustomModules(env){
+  const raw = await env.BW_LMS.get('modules:custom');
+  if (!raw) return [];
+  try{
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  }catch(_){
+    return [];
+  }
+}
+
+export async function getAllModules(env){
+  const custom = await getCustomModules(env);
+  const safeCustom = custom.map(m => ({...m, custom:true, type: m.type || 'content'}));
+  // avoid id collisions with core modules
+  const coreIds = new Set(MODULES.map(m => m.id));
+  const filtered = safeCustom.filter(m => m && m.id && !coreIds.has(m.id));
+  return [...MODULES, ...filtered];
+}
+
+export async function saveCustomModule(env, module){
+  const all = await getCustomModules(env);
+  const next = all.filter(m => m.id !== module.id);
+  next.push({
+    id: module.id,
+    title: module.title,
+    roles: module.roles,
+    type: 'content',
+    content: module.content
+  });
+  await env.BW_LMS.put('modules:custom', JSON.stringify(next));
+  return { ok:true };
 }

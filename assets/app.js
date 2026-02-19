@@ -60,7 +60,7 @@ function showOverlay(title, subtitle, ms = 1800) {
 async function topbarInit(me) {
   const info = document.getElementById('currentUserInfo');
   const logoutBtn = document.getElementById('logoutBtn');
-  const pretty = me.roles.map(r => r === 'cs' ? 'Customer Service' : (r === 'instructor' ? 'Instructor' : 'Admin')).join(', ');
+  const pretty = me.roles.map(r => r === 'cs' ? 'Customer Service' : (r === 'instructor' ? 'Instructor' : (r === 'it' ? 'IT' : 'Admin'))).join(', ');
   if (info) info.textContent = `${me.name} • ${pretty}`;
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
@@ -112,30 +112,29 @@ async function dashboardInit() {
 
   const trainingTabBtn = document.getElementById('trainingTabBtn');
   const adminTabBtn = document.getElementById('adminTabBtn');
-  const adminStandaloneBtn = document.getElementById('adminStandaloneBtn');
-  const trainingTab = document.getElementById('trainingTab');
+  const itTabBtn = document.getElementById('itTabBtn');  const trainingTab = document.getElementById('trainingTab');
   const adminTab = document.getElementById('adminTab');
+  const itTab = document.getElementById('itTab');
 
   function switchTab(tab) {
     trainingTab.classList.add('hidden');
     adminTab.classList.add('hidden');
+    if (itTab) itTab.classList.add('hidden');
     trainingTabBtn.classList.remove('active');
     adminTabBtn.classList.remove('active');
     if (tab === 'training') { trainingTab.classList.remove('hidden'); trainingTabBtn.classList.add('active'); }
     if (tab === 'admin') { adminTab.classList.remove('hidden'); adminTabBtn.classList.add('active'); }
+    if (tab === 'it' && itTab) { itTab.classList.remove('hidden'); itTabBtn.classList.add('active'); }
   }
 
   if (me.roles.includes('admin')) {
-    adminTabBtn.classList.remove('hidden');
-    adminStandaloneBtn.classList.remove('hidden');
-    adminStandaloneBtn.addEventListener('click', () => location.href = 'admin.html');
+    adminTabBtn.classList.remove('hidden');    adminStandaloneBtn.addEventListener('click', () => location.href = 'admin.html');
   } else {
-    adminTabBtn.classList.add('hidden');
-    adminStandaloneBtn.classList.add('hidden');
-  }
+    adminTabBtn.classList.add('hidden');  }
 
   trainingTabBtn.addEventListener('click', () => switchTab('training'));
   adminTabBtn.addEventListener('click', () => switchTab('admin'));
+  if (itTabBtn) itTabBtn.addEventListener('click', () => switchTab('it'));
   switchTab('training');
 
   const [mods, prog] = await Promise.all([API.get('/api/modules'), API.get('/api/progress')]);
@@ -383,6 +382,7 @@ async function adminPageInit() {
 
 async function adminPanelInitInline() {
   const adminTab = document.getElementById('adminTab');
+  const itTab = document.getElementById('itTab');
   if (!adminTab) return;
   adminTab.innerHTML = `<div id="adminMount"></div>`;
   await adminPanelWire(document.getElementById('adminMount'));
@@ -406,7 +406,8 @@ async function adminPanelWire(mount) {
       <div class="card">
         <h3>User List</h3>
         <p style="margin-top:0">Click a user to view/edit their account and progress.</p>
-        <div id="userList" class="list"></div>
+        <input id="userSearch" class="user-search" placeholder="Search users…" />
+        <div id="userList" class="list" style="margin-top:12px"></div>
       </div>
       <div class="card">
         <h3 id="adminRightTitle">Create New User</h3>
@@ -419,9 +420,12 @@ async function adminPanelWire(mount) {
           <div style="margin:8px 0 12px">
             <label style="font-size:12px;color:var(--muted);font-weight:900">Roles (tick all that apply)</label>
             <div class="card" style="padding:12px;margin:8px 0 0;background:rgba(240,249,255,0.55);border:1px solid rgba(0,180,216,0.18)">
-              <label style="display:flex;gap:10px;align-items:center;margin:6px 0"><input type="checkbox" id="newRoleAdmin"> Admin</label>
-              <label style="display:flex;gap:10px;align-items:center;margin:6px 0"><input type="checkbox" id="newRoleInstructor" checked> Instructor</label>
-              <label style="display:flex;gap:10px;align-items:center;margin:6px 0"><input type="checkbox" id="newRoleCS"> Customer Service</label>
+              <div class="role-list">
+                <div class="role-item"><div class="left"><input type="checkbox" id="newRoleAdmin"><span>Admin</span></div></div>
+                <div class="role-item"><div class="left"><input type="checkbox" id="newRoleInstructor" checked><span>Instructor</span></div></div>
+                <div class="role-item"><div class="left"><input type="checkbox" id="newRoleCS"><span>Customer Service</span></div></div>
+                <div class="role-item"><div class="left"><input type="checkbox" id="newRoleIT"><span>IT</span></div></div>
+              </div>
             </div>
           </div>
           <button id="createUserBtn" style="width:100%">Create User</button>
@@ -487,6 +491,7 @@ async function adminPanelWire(mount) {
 
   const els = {
     userList: mount.querySelector('#userList'),
+    userSearch: mount.querySelector('#userSearch'),
     adminRightTitle: mount.querySelector('#adminRightTitle'),
     createUserPanel: mount.querySelector('#createUserPanel'),
     editUserPanel: mount.querySelector('#editUserPanel'),
@@ -518,6 +523,8 @@ async function adminPanelWire(mount) {
     resetProgressBtn: mount.querySelector('#resetProgressBtn'),
     backToCreateBtn: mount.querySelector('#backToCreateBtn'),
   };
+  if (els.userSearch) els.userSearch.addEventListener('input', () => refreshList());
+
 
   let selectedUserId = null;
 
@@ -526,19 +533,23 @@ async function adminPanelWire(mount) {
     const a = prefix === 'new' ? els.newRoleAdmin : els.editRoleAdmin;
     const i = prefix === 'new' ? els.newRoleInstructor : els.editRoleInstructor;
     const c = prefix === 'new' ? els.newRoleCS : els.editRoleCS;
+    const t = prefix === 'new' ? els.newRoleIT : els.editRoleIT;
     if (a.checked) roles.push('admin');
     if (i.checked) roles.push('instructor');
     if (c.checked) roles.push('cs');
+    if (t && t.checked) roles.push('it');
     return roles;
   }
   function prettyRoles(roles) {
-    return roles.map(r => r === 'cs' ? 'Customer Service' : (r === 'instructor' ? 'Instructor' : 'Admin')).join(', ');
+    return roles.map(r => r === 'cs' ? 'Customer Service' : (r === 'instructor' ? 'Instructor' : (r === 'it' ? 'IT' : 'Admin'))).join(', ');
   }
 
   async function refreshList() {
     const out = await API.get('/api/admin/users');
     els.userList.innerHTML = '';
-    out.users.forEach(u => {
+    const q = (els.userSearch?.value || '').toLowerCase().trim();
+    const users = q ? out.users.filter(u => (u.name||'').toLowerCase().includes(q) || (u.username||'').toLowerCase().includes(q)) : out.users;
+    users.forEach(u => {
       const row = document.createElement('div');
       row.className = 'item';
       row.innerHTML = `
@@ -639,4 +650,137 @@ async function adminPanelWire(mount) {
 
   await refreshList();
   showCreate();
+}
+
+
+
+async function itToolsInitInline(){
+  const itTab = document.getElementById('itTab');
+  if (!itTab) return;
+  const me = await API.get('/api/me');
+  if (!me.roles.includes('it')) return;
+  itTab.innerHTML = `<div id="itMount"></div>`;
+  await itToolsWire(document.getElementById('itMount'));
+}
+
+function slugify(s){
+  return (s||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'').slice(0,50);
+}
+
+async function itPageInit() {
+  const me = await guard(); if (!me) return;
+  if (!me.roles.includes('it')) { location.href = 'dashboard.html'; return; }
+  await topbarInit(me);
+  const host = document.getElementById('pageHost');
+  host.innerHTML = `
+    <div class="topbar" style="margin-bottom:14px">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h2 style="margin:0;color:var(--primary)">IT Tools</h2>
+          <div class="sub">Create modules & assign to roles</div>
+        </div>
+      </div>
+      <div class="pill">
+        <span id="currentUserInfo" style="font-weight:900"></span>
+        <button class="secondary" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+    <div class="tabs" style="margin-bottom:14px">
+      <button class="tab-btn" onclick="location.href='dashboard.html'">Back to Dashboard</button>
+    </div>
+    <div id="itMount"></div>
+  `;
+  await itToolsWire(document.getElementById('itMount'));
+}
+
+async function itToolsWire(mount){
+  mount.innerHTML = `
+    <div class="grid">
+      <div class="card">
+        <h3 style="margin:0">Create Module</h3>
+        <p style="margin-top:6px" class="sub">Modules you create will appear for assigned roles on the Training tab.</p>
+
+        <div class="row">
+          <div><input id="itTitle" placeholder="Module title" /></div>
+          <div><input id="itId" placeholder="Optional id (leave blank to auto-generate)" /></div>
+        </div>
+
+        <div style="margin:10px 0 6px">
+          <label style="font-size:12px;color:var(--muted);font-weight:900">Assign to roles</label>
+        </div>
+
+        <div class="role-list">
+          <div class="role-item"><div class="left"><input type="checkbox" id="itRoleAdmin"><span>Admin</span></div></div>
+          <div class="role-item"><div class="left"><input type="checkbox" id="itRoleInstructor" checked><span>Instructor</span></div></div>
+          <div class="role-item"><div class="left"><input type="checkbox" id="itRoleCS"><span>Customer Service</span></div></div>
+          <div class="role-item"><div class="left"><input type="checkbox" id="itRoleIT" checked><span>IT</span></div></div>
+        </div>
+
+        <div style="margin-top:12px">
+          <textarea id="itContent" placeholder="Module content (plain text)" style="width:100%;min-height:180px;padding:12px 14px;border-radius:12px;border:1px solid rgba(0,180,216,0.18);background:rgba(255,255,255,0.85)"></textarea>
+        </div>
+
+        <button id="itCreateBtn" style="width:100%;margin-top:12px">Create Module</button>
+        <div id="itCreateMsg" class="sub" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin:0">Modules</h3>
+        <p class="sub" style="margin-top:6px">Built-in modules + your custom modules.</p>
+        <div id="itModuleList" style="margin-top:12px"></div>
+      </div>
+    </div>
+  `;
+
+  async function refresh(){
+    const mods = await API.get('/api/it/modules');
+    const list = mods.map(m => {
+      const roles = (m.roles||[]).join(', ');
+      const kind = m.custom ? 'CUSTOM' : 'BUILT-IN';
+      return `
+        <div class="item">
+          <div>
+            <strong>${escapeHtml(m.title)}</strong>
+            <p style="margin:4px 0 0">${escapeHtml(kind)} • id: ${escapeHtml(m.id)} • roles: ${escapeHtml(roles)}</p>
+          </div>
+          <span class="badge ${m.custom ? 'pending' : 'done'}">${m.custom ? 'CUSTOM' : 'CORE'}</span>
+        </div>
+      `;
+    }).join('');
+    document.getElementById('itModuleList').innerHTML = list || '<div class="sub">No modules.</div>';
+  }
+
+  await refresh();
+
+  document.getElementById('itCreateBtn').addEventListener('click', async () => {
+    const title = document.getElementById('itTitle').value.trim();
+    const idRaw = document.getElementById('itId').value.trim();
+    const content = document.getElementById('itContent').value.trim();
+    const roles = [];
+    if (document.getElementById('itRoleAdmin').checked) roles.push('admin');
+    if (document.getElementById('itRoleInstructor').checked) roles.push('instructor');
+    if (document.getElementById('itRoleCS').checked) roles.push('cs');
+    if (document.getElementById('itRoleIT').checked) roles.push('it');
+
+    const msg = document.getElementById('itCreateMsg');
+    msg.textContent = '';
+
+    if (!title) return msg.textContent = 'Title is required.';
+    if (!content) return msg.textContent = 'Content is required.';
+    if (!roles.length) return msg.textContent = 'Select at least one role.';
+
+    const id = idRaw || slugify(title);
+
+    try{
+      await API.post('/api/it/modules', { title, id, content, roles });
+      msg.textContent = 'Created.';
+      document.getElementById('itTitle').value='';
+      document.getElementById('itId').value='';
+      document.getElementById('itContent').value='';
+      await refresh();
+    }catch(e){
+      msg.textContent = (e && e.message) ? e.message : 'Failed.';
+    }
+  });
 }

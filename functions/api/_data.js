@@ -2,7 +2,7 @@ export const MODULES = [
   {
     id: "introduction",
     title: "Welcome to Bright Waves",
-    roles: ["admin", "instructor", "cs"],
+    roles: ["admin", "instructor", "cs", "it"],
     type: "intro",
     content:
 `Congratulations on commencing your employment at Bright Waves Swim School!
@@ -22,14 +22,14 @@ Founder – Managing Director`,
   {
     id: "vision",
     title: "Vision & Mission",
-    roles: ["instructor", "cs"],
+    roles: ["instructor", "cs", "it"],
     type: "quiz",
     quiz: { q: "What is our mission focused on?", opts: ["Profit", "Creating confident swimmers", "Competition"], a: 1 },
   },
   {
     id: "attendance",
     title: "Attendance & Absence",
-    roles: ["instructor", "cs"],
+    roles: ["instructor", "cs", "it"],
     type: "quiz",
     content: "Maintain 90% attendance. Call manager 2 hours before shift if unwell.",
     quiz: { q: "How many hours before shift must you call if sick?", opts: ["30 minutes", "1 hour", "2 hours"], a: 2 },
@@ -37,7 +37,7 @@ Founder – Managing Director`,
   {
     id: "management",
     title: "Management Responsibilities",
-    roles: ["admin"],
+    roles: ["admin", "it"],
     type: "quiz",
     content: "Manager overview: monitoring attendance, availability, and compliance.",
     quiz: { q: "What should be monitored quarterly?", opts: ["Attendance", "Uniform", "Car parks"], a: 0 },
@@ -95,6 +95,25 @@ export const DEFAULT_USERS = [
     "progress": {},
     "ack": {},
     "viewed": {}
+  },
+  {
+    "id": "4",
+    "name": "IT Support",
+    "username": "it",
+    "pwd": {
+      "algo": "pbkdf2-sha256",
+      "iter": 100000,
+      "salt": "O3wp6bq0rtCBe/CVNNwRkA==",
+      "dk": "FMExTD4zpq2NVx3JTCmRYBnQNyTcc/yuL3xoFc1AF9E="
+    },
+    "roles": [
+      "it"
+    ],
+    "progress": {},
+    "ack": {},
+    "viewed": {},
+    "forceReset": true
   }
+
 ];
 
