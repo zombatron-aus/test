@@ -1429,6 +1429,7 @@ async function itToolsInitInline(){
       });
 
       els.ok.textContent = 'Module created.';
+      await refreshExisting();
       clearAll();
       await refreshExisting();
     } catch (e) {
@@ -1514,7 +1515,8 @@ async function itToolsWire(mount){
   `;
 
   async function refresh(){
-    const mods = await API.get('/api/it/modules');
+    const out = await API.get('/api/it/modules');
+    const mods = (out && out.modules) ? out.modules : [];
     const list = mods.map(m => {
       const roles = (m.roles||[]).join(', ');
       const kind = m.custom ? 'CUSTOM' : 'BUILT-IN';
