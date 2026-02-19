@@ -32,6 +32,18 @@ const API = {
   put(path, body) { return this.request(path, { method: 'PUT', body: JSON.stringify(body || {}) }); },
 };
 
+
+function escapeHtml(input) {
+  const s = (input ?? "").toString();
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+
 function qs(name) { return new URLSearchParams(location.search).get(name); }
 
 async function guard() {
