@@ -1,1162 +1,167 @@
-/* Bright Waves LMS (multi-page)
-   Persistence: Cloudflare KV via Pages Functions under /api/*
-   Auth: token in sessionStorage, sent as Authorization: Bearer <token>
-*/
+const API = (p)=> (p.startsWith("/")?p:"/"+p);
+const qs = (s)=>document.querySelector(s);
+const qsa = (s)=>Array.from(document.querySelectorAll(s));
+function escapeHtml(s){return (s??"").toString().replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");}
+function toast(msg, err=false){
+  const el=document.createElement("div");
+  el.style.position="fixed"; el.style.right="18px"; el.style.bottom="18px"; el.style.zIndex="9999";
+  el.style.padding="12px 14px"; el.style.borderRadius="14px"; el.style.border="1px solid #e2e8f0";
+  el.style.background="#fff"; el.style.boxShadow="0 18px 50px rgba(2,12,27,.2)";
+  el.style.fontWeight="800"; el.style.fontSize="13px"; el.style.color=err?"#b91c1c":"#0f172a";
+  el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),2600);
+}
+async function apiFetch(path, opts={}){
+  const res = await fetch(API(path), {credentials:"include", headers:{"content-type":"application/json", ...(opts.headers||{})}, ...opts});
+  const ct = res.headers.get("content-type")||"";
+  let body=null;
+  if (ct.includes("application/json")) body = await res.json().catch(()=>null);
+  else body = await res.text().catch(()=> "");
+  if (!res.ok) throw new Error(body?.error || body?.message || "Request failed");
+  return body;
+}
+async function ensureAuthed(){ try{return await apiFetch("/api/me");}catch(e){return null;} }
+function setTopbar(user){
+  const who=qs("#who"); if (who) who.textContent = user ? `${user.name} • ${user.roles.map(r=>r.toUpperCase()).join(", ")}` : "";
+  const logout=qs("#logoutBtn");
+  if (logout) logout.onclick = async ()=>{ try{await apiFetch("/api/logout",{method:"POST",body:"{}"});}catch(e){} location.href="/"; };
+}
+function getParam(n){ return new URL(location.href).searchParams.get(n); }
 
-const BW_BASE = window.__BW_BASE_PATH || '';
-
-const API = {
-  async request(path, opts = {}) {
-    const url = (path.startsWith('http') ? path : (BW_BASE + path));
-    const token = sessionStorage.getItem('bw_token') || '';
-    const headers = Object.assign(
-      { 'Content-Type': 'application/json' },
-      opts.headers || {},
-      token ? { 'Authorization': `Bearer ${token}` } : {}
-    );
-    const res = await fetch(url, { ...opts, headers });
-    let data = null;
-    const ct = res.headers.get('content-type') || '';
-    if (ct.includes('application/json')) data = await res.json().catch(() => null);
-    if (!res.ok) {
-      const msg = (data && (data.error || data.message)) || `Request failed (${res.status})`;
-      const err = new Error(msg);
-      err.status = res.status;
-      err.data = data;
-      throw err;
-    }
-    return data;
-  },
-  get(path) { return this.request(path); },
-  post(path, body) { return this.request(path, { method: 'POST', body: JSON.stringify(body || {}) }); },
-  put(path, body) { return this.request(path, { method: 'PUT', body: JSON.stringify(body || {}) }); },
-  del(path) { return this.request(path, { method: 'DELETE' }); },
-};
-
-function qs(name) { return new URLSearchParams(location.search).get(name); }
-
-async function guard() {
-  const token = sessionStorage.getItem('bw_token');
-  if (!token) { location.href = 'index.html'; return null; }
-  try {
-    const me = await API.get('/api/me');
-    return me;
-  } catch {
-    sessionStorage.removeItem('bw_token');
-    location.href = 'index.html';
-    return null;
-  }
+async function loginInit(){
+  const form=qs("#loginForm"); if(!form) return;
+  form.addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    try{
+      await apiFetch("/api/login",{method:"POST", body: JSON.stringify({username:qs("#username").value.trim(), password:qs("#password").value})});
+      location.href="/dashboard.html";
+    }catch(err){ toast(err.message,true); }
+  });
 }
 
-function showOverlay(title, subtitle, ms = 1800) {
-  const o = document.getElementById('welcomeOverlay');
-  if (!o) return;
-  document.getElementById('welcomeTitle').textContent = title;
-  document.getElementById('welcomeSubtitle').textContent = subtitle;
-  o.classList.remove('hidden');
-  clearTimeout(window.__bwOverlayTimer);
-  window.__bwOverlayTimer = setTimeout(() => o.classList.add('hidden'), ms);
+async function dashboardInit(){
+  const root=qs("#dashboardRoot"); if(!root) return;
+  const me = await ensureAuthed(); if(!me){ location.href="/"; return; }
+  setTopbar(me);
+  const out = await apiFetch("/api/modules");
+  const modules = out.modules||[];
+  const progress = out.progress||{};
+  const total=modules.length;
+  const done=modules.filter(m=>progress?.[m.id]?.done).length;
+  const pct = total? Math.round(done/total*100):0;
+  qs("#progressBar").style.width=pct+"%";
+  qs("#progressPct").textContent=pct+"% complete";
+  qs("#progressKpi").textContent=`${done} / ${total} modules`;
+
+  const list=qs("#moduleList"); list.innerHTML="";
+  modules.forEach(m=>{
+    const locked=!!m.locked;
+    const isDone=!!progress?.[m.id]?.done;
+    const div=document.createElement("div");
+    div.className="item";
+    div.innerHTML=`
+      <div class="meta">
+        <div class="title">${escapeHtml(m.title)}</div>
+        <div class="sub">${escapeHtml(m.description||"")}</div>
+      </div>
+      <span class="badge">${locked?"LOCKED":(isDone?"DONE":"PENDING")}</span>
+      <div class="actions"><button class="btn ${locked?"secondary":""}" ${locked?"disabled":""} type="button">${locked?"Locked":"Open"}</button></div>
+    `;
+    div.querySelector("button").onclick=()=>{ if(!locked) location.href=`/module.html?id=${encodeURIComponent(m.id)}`; };
+    list.appendChild(div);
+  });
 }
 
-async function topbarInit(me) {
-  const info = document.getElementById('currentUserInfo');
-  const logoutBtn = document.getElementById('logoutBtn');
-  const pretty = me.roles.map(r => r === 'cs' ? 'Customer Service' : (r === 'instructor' ? 'Instructor' : (r === 'it' ? 'IT' : 'Admin'))).join(', ');
-  if (info) info.textContent = `${me.name} • ${pretty}`;
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', async () => {
-      try { await API.post('/api/logout'); } catch {}
-      sessionStorage.removeItem('bw_token');
-      location.href = 'index.html';
-    });
-  }
+async function moduleInit(){
+  const wrap=qs("#moduleWrap"); if(!wrap) return;
+  const me=await ensureAuthed(); if(!me){ location.href="/"; return; }
+  setTopbar(me);
+  const id=getParam("id"); if(!id){ location.href="/dashboard.html"; return; }
+  let out;
+  try{ out=await apiFetch(`/api/module?id=${encodeURIComponent(id)}`); }
+  catch(e){ toast(e.message,true); location.href="/dashboard.html"; return; }
+  const m=out.module;
+  qs("#modTitle").textContent=m.title;
+  qs("#modDesc").textContent=m.description||"";
+  const card=qs("#moduleCard");
+  if (m.style?.font) card.style.fontFamily=m.style.font;
+  if (m.style?.baseSize) card.style.fontSize=m.style.baseSize+"px";
+  if (m.style?.textColor) card.style.color=m.style.textColor;
 
-  const seen = sessionStorage.getItem('bw_welcome_seen') || '0';
-  if (seen !== '1') {
-    sessionStorage.setItem('bw_welcome_seen', '1');
-    showOverlay(`Welcome, ${me.name.split(' ')[0]}`, `We're excited to have you on board. Let's get started.`, 2200);
-  }
+  const pages = (Array.isArray(m.pages)&&m.pages.length)? m.pages : [{type:"rich", title:m.title, html:(m.content||"")}];
+  let idx=0;
+  const pageTitle=qs("#pageTitle");
+  const pageBody=qs("#pageBody");
+  const btnPrev=qs("#btnPrev");
+  const btnNext=qs("#btnNext");
+  const btnDone=qs("#btnDone");
+  const btnQuiz=qs("#btnQuiz");
 
-  const overlay = document.getElementById('welcomeOverlay');
-  const cont = document.getElementById('welcomeContinueBtn');
-  if (cont) cont.addEventListener('click', () => overlay.classList.add('hidden'));
-  if (overlay) overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.add('hidden'); });
-}
-
-async function loginPageInit() {
-  const btn = document.getElementById('loginBtn');
-  const err = document.getElementById('error');
-  const u = document.getElementById('username');
-  const p = document.getElementById('password');
-
-  async function doLogin() {
-    err.textContent = '';
-    try {
-      const out = await API.post('/api/login', { username: u.value.trim(), password: p.value });
-      if (out.forceReset) { sessionStorage.setItem('bw_token', out.token); location.href='set-password.html'; return; }
-      sessionStorage.setItem('bw_token', out.token);
-      sessionStorage.setItem('bw_welcome_seen', '0');
-      location.href = 'dashboard.html';
-    } catch (e) {
-      err.textContent = e.message || 'Login failed';
-    }
-  }
-
-  btn.addEventListener('click', doLogin);
-  u.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
-  p.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
-}
-
-async function dashboardInit() {
-  const me = await guard(); if (!me) return;
-  await topbarInit(me);
-
-  const trainingTabBtn = document.getElementById('trainingTabBtn');
-  const adminTabBtn = document.getElementById('adminTabBtn');
-  const itTabBtn = document.getElementById('itTabBtn');  const trainingTab = document.getElementById('trainingTab');
-  const adminTab = document.getElementById('adminTab');
-  const itTab = document.getElementById('itTab');
-  let __bwItToolsLoaded = false;
-
-  function switchTab(tab) {
-    trainingTab.classList.add('hidden');
-    adminTab.classList.add('hidden');
-    if (itTab) itTab.classList.add('hidden');
-    trainingTabBtn.classList.remove('active');
-    adminTabBtn.classList.remove('active');
-    if (tab === 'training') { trainingTab.classList.remove('hidden'); trainingTabBtn.classList.add('active'); }
-    if (tab === 'admin') { adminTab.classList.remove('hidden'); adminTabBtn.classList.add('active'); }
-    if (tab === 'it' && itTab) { itTab.classList.remove('hidden'); itTabBtn.classList.add('active'); }
-  }
-
-  if (me.roles.includes('admin') || me.roles.includes('it')) {
-    adminTabBtn.classList.remove('hidden');
-  } else {
-    adminTabBtn.classList.add('hidden');
-  }
-
-  if (itTabBtn) {
-    if (me.roles.includes('it')) {
-      itTabBtn.classList.remove('hidden');
+  function render(){
+    const p=pages[idx];
+    pageTitle.textContent=p.title||"";
+    if (p.type==="image"){
+      pageBody.innerHTML=`<img alt="" style="max-width:100%;border-radius:16px;border:1px solid #e2e8f0" src="${escapeHtml(p.url||p.src||"")}">`;
+    } else if (p.type==="video"){
+      const url=p.url||p.src||"";
+      pageBody.innerHTML=`<video controls style="width:100%;border-radius:16px;border:1px solid #e2e8f0"><source src="${escapeHtml(url)}"></video>`;
     } else {
-      itTabBtn.classList.add('hidden');
+      pageBody.innerHTML=p.html || "<p></p>";
     }
+    btnPrev.disabled = idx===0;
+    btnNext.style.display = idx<pages.length-1 ? "inline-block":"none";
+    const last = idx===pages.length-1;
+    btnDone.style.display = (last && m.type==="intro") ? "inline-block":"none";
+    btnQuiz.style.display = (last && Array.isArray(m.quiz) && m.quiz.length) ? "inline-block":"none";
   }
-trainingTabBtn.addEventListener('click', () => switchTab('training'));
-  adminTabBtn.addEventListener('click', () => switchTab('admin'));
-  if (itTabBtn) itTabBtn.addEventListener('click', () => {
-      switchTab('it');
-      if (!__bwItToolsLoaded) {
-        __bwItToolsLoaded = true;
-        try { itToolsInitInline(); } catch(e) { console.error(e); }
-      }
-    });
-  switchTab('training');
-
-  const [mods, prog] = await Promise.all([API.get('/api/modules'), API.get('/api/progress')]);
-  const accessible = mods.filter(m => m.roles.some(r => me.roles.includes(r)));
-  const completed = accessible.filter(m => prog.progress[m.id]).length;
-  const percent = accessible.length ? Math.round((completed / accessible.length) * 100) : 0;
-
-  document.getElementById('progressFill').style.width = percent + '%';
-  document.getElementById('progressText').textContent = `${percent}% Complete`;
-  document.getElementById('progressCount').textContent = `${completed} / ${accessible.length} modules`;
-
-  const introDone = !!prog.progress['introduction'];
-
-  const list = document.getElementById('moduleList');
-  list.innerHTML = '';
-  accessible
-    .slice()
-    .sort((a,b)=> (a.id==='introduction'?-1:(b.id==='introduction'?1:a.title.localeCompare(b.title))))
-    .forEach(m => {
-      const locked = m.id !== 'introduction' && !introDone;
-      const done = !!prog.progress[m.id];
-      const badge = done ? `<span class="badge done">DONE</span>` : (locked ? `<span class="badge lock">LOCKED</span>` : `<span class="badge pending">PENDING</span>`);
-      const row = document.createElement('div');
-      row.className = 'item';
-      row.innerHTML = `
-        <div>
-          <strong>${m.title}</strong>
-          <p style="margin:4px 0 0">${locked ? 'Complete Introduction to unlock.' : (done ? 'Completed.' : 'Ready to start.')}</p>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px">
-          ${badge}
-          <button ${locked ? 'disabled' : ''} data-open="${m.id}">Open</button>
-        </div>
-      `;
-      row.querySelector('[data-open]')?.addEventListener('click', () => {
-        location.href = `module.html?id=${encodeURIComponent(m.id)}`;
-      });
-      list.appendChild(row);
-    });
-
-  if (me.roles.includes('admin') || me.roles.includes('it')) {
-    await adminPanelInitInline(mods);
-  }
-}
-
-async function moduleInit() {
-  const me = await guard(); if (!me) return;
-  await topbarInit(me);
-
-  const moduleId = qs('id');
-  if (!moduleId) { location.href = 'dashboard.html'; return; }
-
-  const access = await API.get(`/api/module-access?id=${encodeURIComponent(moduleId)}`);
-  if (!access.ok) {
-    showOverlay('Access blocked', access.reason || 'You cannot access this module.', 2200);
-    setTimeout(() => location.href = 'dashboard.html', 600);
-    return;
-  }
-
-  await API.post('/api/view', { moduleId });
-
-  const mods = await API.get('/api/modules');
-  const m = mods.find(x => x.id === moduleId);
-  if (!m) { location.href = 'dashboard.html'; return; }
-
-  const prog = await API.get('/api/progress');
-  const acknowledged = !!prog.ack[moduleId];
-
-  const host = document.getElementById('pageHost');
-  host.innerHTML = '';
-
-  if (m.id === 'vision') {
-    const wrap = document.createElement('div');
-    wrap.className = 'card vision-shell';
-    wrap.innerHTML = `
-      <div class="vision-grid">
-        <div class="vision-left">
-          <div class="vision-left-inner">
-            <p class="vision-kicker">Our Vision</p>
-            <p class="vision-text">Create a lifelong love of the water</p>
-
-            <p class="vision-kicker">Our Mission</p>
-            <p class="vision-par">To inspire and encourage our communities to become swimmers who succeed and thrive in all aquatic environments.</p>
-
-            <p class="purpose-title">Our Purpose</p>
-            <div class="purpose-item">
-              <p class="purpose-word pw-inspire">Inspire</p>
-              <p class="purpose-sub">Leading by example</p>
-            </div>
-            <div class="purpose-item">
-              <p class="purpose-word pw-encourage">Encourage</p>
-              <p class="purpose-sub">It’s all about our people</p>
-            </div>
-            <div class="purpose-item">
-              <p class="purpose-word pw-succeed">Succeed</p>
-              <p class="purpose-sub">Positive outcomes</p>
-            </div>
-
-            <div class="vision-actions">
-              <button id="ackBtn">${acknowledged ? 'Acknowledged ✅' : 'Acknowledge'}</button>
-              <button class="secondary" id="backBtn">Back to Modules</button>
-            </div>
-
-            ${acknowledged ? `<div style="margin-top:12px"><button class="ghost" id="startQuizBtn" style="width:100%">Start Quiz</button></div>` : ``}
-          </div>
-        </div>
-
-        <div class="vision-right"></div>
-      </div>
-    `;
-    host.appendChild(wrap);
-
-    wrap.querySelector('#backBtn').addEventListener('click', () => location.href = 'dashboard.html');
-    wrap.querySelector('#ackBtn').addEventListener('click', async () => {
-      if (!acknowledged) {
-        await API.post('/api/ack', { moduleId });
-        location.reload();
-      }
-    });
-    wrap.querySelector('#startQuizBtn')?.addEventListener('click', () => location.href = `quiz.html?id=${encodeURIComponent(moduleId)}`);
-    return;
-  }
-
-  if (m.type === 'intro') {
-    const wrap = document.createElement('div');
-    wrap.className = 'card';
-    wrap.innerHTML = `
-      <h2 style="color:var(--primary)">${m.title}</h2>
-      <p style="white-space:pre-line">${m.content}</p>
-      <div class="row" style="margin-top:14px">
-        <div><button id="introAckBtn" style="width:100%">Acknowledge & Continue</button></div>
-        <div><button class="secondary" id="backBtn" style="width:100%">Back to Modules</button></div>
-      </div>
-    `;
-    host.appendChild(wrap);
-    wrap.querySelector('#backBtn').addEventListener('click', () => location.href = 'dashboard.html');
-    wrap.querySelector('#introAckBtn').addEventListener('click', async () => {
-      await API.post('/api/complete-intro');
-      showOverlay('Welcome aboard!', 'Introduction completed — training unlocked.', 1600);
-      setTimeout(() => location.href = 'dashboard.html', 450);
-    });
-    return;
-  }
-
-  const wrap = document.createElement('div');
-  wrap.className = 'card';
-  wrap.innerHTML = `
-    <h2 style="color:var(--primary)">${m.title}</h2>
-    <p>${m.content || ''}</p>
-
-    <div class="item" style="background:#fff">
-      <div>
-        <strong>Policy acknowledgement</strong>
-        <p style="margin:4px 0 0">Acknowledge before attempting the quiz.</p>
-      </div>
-      <button id="ackBtn">${acknowledged ? 'Acknowledged ✅' : 'Acknowledge'}</button>
-    </div>
-
-    ${acknowledged ? `<div style="margin-top:12px"><button class="ghost" id="startQuizBtn" style="width:100%">Start Quiz</button></div>` : ``}
-
-    <div class="row" style="margin-top:14px">
-      <div><button class="secondary" id="backBtn" style="width:100%">Back to Modules</button></div>
-    </div>
-  `;
-  host.appendChild(wrap);
-
-  wrap.querySelector('#backBtn').addEventListener('click', () => location.href = 'dashboard.html');
-  wrap.querySelector('#ackBtn').addEventListener('click', async () => {
-    if (!acknowledged) {
-      await API.post('/api/ack', { moduleId });
-      location.reload();
-    }
-  });
-  wrap.querySelector('#startQuizBtn')?.addEventListener('click', () => location.href = `quiz.html?id=${encodeURIComponent(moduleId)}`);
-}
-
-async function quizInit() {
-  const me = await guard(); if (!me) return;
-  await topbarInit(me);
-
-  const moduleId = qs('id');
-  if (!moduleId) { location.href = 'dashboard.html'; return; }
-
-  const elig = await API.get(`/api/quiz-eligibility?id=${encodeURIComponent(moduleId)}`);
-  if (!elig.ok) {
-    showOverlay('Quiz blocked', elig.reason || 'You cannot start this quiz.', 2400);
-    setTimeout(() => location.href = `module.html?id=${encodeURIComponent(moduleId)}`, 700);
-    return;
-  }
-
-  const mods = await API.get('/api/modules');
-  const m = mods.find(x => x.id === moduleId);
-  if (!m || !m.quiz) { location.href = 'dashboard.html'; return; }
-
-  const indices = m.quiz.opts.map((_, idx) => idx);
-  for (let i = indices.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [indices[i], indices[j]] = [indices[j], indices[i]];
-  }
-  const correctDisplayIdx = indices.indexOf(m.quiz.a);
-
-  const host = document.getElementById('pageHost');
-  host.innerHTML = '';
-
-  const wrap = document.createElement('div');
-  wrap.className = 'card';
-  wrap.innerHTML = `
-    <h2 style="color:var(--primary)">${m.title} – Quiz</h2>
-    <p style="margin-bottom:12px">${m.quiz.q}</p>
-    <div id="quizBtns" class="list"></div>
-    <div class="row" style="margin-top:16px">
-      <div><button class="secondary" id="backBtn" style="width:100%">Back to Module</button></div>
-    </div>
-  `;
-  host.appendChild(wrap);
-
-  wrap.querySelector('#backBtn').addEventListener('click', () => location.href = `module.html?id=${encodeURIComponent(moduleId)}`);
-
-  const btnHost = wrap.querySelector('#quizBtns');
-  indices.forEach((origIdx, displayIdx) => {
-    const b = document.createElement('button');
-    b.className = 'ghost';
-    b.style.width = '100%';
-    b.textContent = m.quiz.opts[origIdx];
-    b.addEventListener('click', async () => {
-      if (displayIdx === correctDisplayIdx) {
-        await API.post('/api/complete-module', { moduleId });
-        showOverlay('Nice work!', 'Quiz passed — module completed.', 1500);
-        setTimeout(() => location.href = 'dashboard.html', 450);
-      } else {
-        showOverlay('Not quite', 'Incorrect. Try again — answers reshuffled.', 1400);
-        setTimeout(() => location.reload(), 350);
-      }
-    });
-    btnHost.appendChild(b);
-  });
-}
-
-async function adminPageInit() {
-  const me = await guard(); if (!me) return;
-  if (!(me.roles.includes('admin') || me.roles.includes('it'))) { location.href = 'dashboard.html'; return; }
-  await topbarInit(me);
-  await adminPanelInitStandalone();
-}
-
-async function adminPanelInitInline() {
-  const adminTab = document.getElementById('adminTab');
-  const itTab = document.getElementById('itTab');
-  let __bwItToolsLoaded = false;
-  if (!adminTab) return;
-  adminTab.innerHTML = `<div id="adminMount"></div>`;
-  await adminPanelWire(document.getElementById('adminMount'));
-}
-
-async function adminPanelInitStandalone() {
-  const host = document.getElementById('pageHost');
-  host.innerHTML = `
-    <div class="topbar" style="margin-bottom:14px">
-      <div class="brand"><div class="logo"></div><div><h2 style="margin:0;color:var(--primary)">Admin Panel</h2><small>Manage accounts & track progress</small></div></div>
-      <div><button class="secondary" onclick="location.href='dashboard.html'">Back to Dashboard</button></div>
-    </div>
-    <div id="adminMount"></div>
-  `;
-  await adminPanelWire(document.getElementById('adminMount'));
-}
-
-async function adminPanelWire(mount) {
-  const me = await API.get('/api/me');
-  mount.innerHTML = `
-    <div class="grid">
-      <div class="card">
-        <h3>User List</h3>
-        <p style="margin-top:0">Click a user to view/edit their account and progress.</p>
-        <input id="userSearch" class="user-search" placeholder="Search users…" />
-        <div id="userList" class="list" style="margin-top:12px"></div>
-      </div>
-      <div class="card">
-        <h3 id="adminRightTitle">Create New User</h3>
-        <div id="createUserPanel">
-          <input id="newName" placeholder="Full Name" />
-          <div class="row">
-            <div><input id="newUsername" placeholder="Username" /></div>
-            <div><input id="newPassword" placeholder="Password" /></div>
-          </div>
-          <div style="margin:8px 0 12px">
-            <label style="font-size:12px;color:var(--muted);font-weight:900">Roles (tick all that apply)</label>
-            <div class="card" style="padding:12px;margin:8px 0 0;background:rgba(240,249,255,0.55);border:1px solid rgba(0,180,216,0.18)">
-              <div class="role-list">
-                <div class="role-item"><div class="left"><input type="checkbox" id="newRoleAdmin"><span>Admin</span></div></div>
-                <div class="role-item"><div class="left"><input type="checkbox" id="newRoleInstructor" checked><span>Instructor</span></div></div>
-                <div class="role-item"><div class="left"><input type="checkbox" id="newRoleCS"><span>Customer Service</span></div></div>
-                <div class="role-item"><div class="left"><input type="checkbox" id="newRoleIT"><span>IT</span></div></div>
-              </div>
-            </div>
-          </div>
-          <button id="createUserBtn" style="width:100%">Create User</button>
-        </div>
-
-        <div id="editUserPanel" class="hidden">
-          <div class="item" style="background:#fff">
-            <div>
-              <strong id="editUserName">User</strong>
-              <p id="editUserMeta" style="margin:4px 0 0">—</p>
-            </div>
-            <span id="editUserBadge" class="badge pending">USER</span>
-          </div>
-
-          <div class="row" style="margin-top:10px">
-            <div>
-              <label style="font-size:12px;color:var(--muted);font-weight:900">Full Name</label>
-              <input id="editName" placeholder="Full Name" />
-            </div>
-            <div>
-              <label style="font-size:12px;color:var(--muted);font-weight:900">Username</label>
-              <input id="editUsername" placeholder="Username" />
-            </div>
-          </div>
-
-          <div class="row">
-            <div>
-              <label style="font-size:12px;color:var(--muted);font-weight:900">Password</label>
-              <input id="editPassword" placeholder="Password" />
-            </div>
-            <div>
-              <label style="font-size:12px;color:var(--muted);font-weight:900">Roles</label>
-              <div class="card" style="padding:12px;margin:8px 0 0;background:rgba(240,249,255,0.55);border:1px solid rgba(0,180,216,0.18)">
-                <div class="role-list">
-                <div class="role-item"><div class="left"><input type="checkbox" id="editRoleAdmin"><span>Admin</span></div></div>
-                <div class="role-item"><div class="left"><input type="checkbox" id="editRoleInstructor"><span>Instructor</span></div></div>
-                <div class="role-item"><div class="left"><input type="checkbox" id="editRoleCS"><span>Customer Service</span></div></div>
-                <div class="role-item"><div class="left"><input type="checkbox" id="editRoleIT"><span>IT</span></div></div>
-              </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="card" style="padding:16px;background:rgba(240,249,255,0.55);border:1px solid rgba(0,180,216,0.18)">
-            <strong>Progress for this user</strong>
-            <div class="progress-wrap">
-              <div class="progress-bar"><div id="adminProgressFill" class="progress-fill"></div></div>
-            </div>
-            <div class="kpi">
-              <small id="adminProgressText">0% Complete</small>
-              <small id="adminProgressCount">0 / 0 modules</small>
-            </div>
-            <div id="adminProgressList" class="list" style="margin-top:10px"></div>
-          </div>
-
-          <div class="row">
-            <div><button id="saveUserBtn" style="width:100%">Save Changes</button></div>
-            <div><button class="danger" id="resetProgressBtn" style="width:100%">Reset Progress</button></div>
-          </div>
-
-          <button class="ghost" id="backToCreateBtn" style="width:100%;margin-top:10px">Back to Create User</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // Admins cannot assign or edit IT role/accounts (IT role manages itself)
-  const canManageIT = me.roles.includes('it');
-  // Hide IT role checkboxes if not IT
-  const itNew = mount.querySelector('#newRoleIT');
-  if (itNew && !canManageIT) itNew.closest('.role-item')?.classList.add('hidden');
-  const itEdit = mount.querySelector('#editRoleIT');
-  if (itEdit && !canManageIT) itEdit.closest('.role-item')?.classList.add('hidden');
-
-  const els = {
-    userList: mount.querySelector('#userList'),
-    userSearch: mount.querySelector('#userSearch'),
-    adminRightTitle: mount.querySelector('#adminRightTitle'),
-    createUserPanel: mount.querySelector('#createUserPanel'),
-    editUserPanel: mount.querySelector('#editUserPanel'),
-
-    newName: mount.querySelector('#newName'),
-    newUsername: mount.querySelector('#newUsername'),
-    newPassword: mount.querySelector('#newPassword'),
-    newRoleAdmin: mount.querySelector('#newRoleAdmin'),
-    newRoleInstructor: mount.querySelector('#newRoleInstructor'),
-    newRoleCS: mount.querySelector('#newRoleCS'),
-    newRoleIT: mount.querySelector('#newRoleIT'),
-    createUserBtn: mount.querySelector('#createUserBtn'),
-
-    editUserName: mount.querySelector('#editUserName'),
-    editUserMeta: mount.querySelector('#editUserMeta'),
-    editUserBadge: mount.querySelector('#editUserBadge'),
-    editName: mount.querySelector('#editName'),
-    editUsername: mount.querySelector('#editUsername'),
-    editPassword: mount.querySelector('#editPassword'),
-    editRoleAdmin: mount.querySelector('#editRoleAdmin'),
-    editRoleInstructor: mount.querySelector('#editRoleInstructor'),
-    editRoleCS: mount.querySelector('#editRoleCS'),
-    editRoleIT: mount.querySelector('#editRoleIT'),
-
-    adminProgressFill: mount.querySelector('#adminProgressFill'),
-    adminProgressText: mount.querySelector('#adminProgressText'),
-    adminProgressCount: mount.querySelector('#adminProgressCount'),
-    adminProgressList: mount.querySelector('#adminProgressList'),
-
-    saveUserBtn: mount.querySelector('#saveUserBtn'),
-    resetProgressBtn: mount.querySelector('#resetProgressBtn'),
-    backToCreateBtn: mount.querySelector('#backToCreateBtn'),
+  btnPrev.onclick=()=>{ if(idx>0){idx--;render();}};
+  btnNext.onclick=()=>{ if(idx<pages.length-1){idx++;render();}};
+  btnDone.onclick=async ()=>{
+    try{ await apiFetch("/api/progress",{method:"POST", body: JSON.stringify({moduleId:m.id, done:true})}); toast("Acknowledged!"); location.href="/dashboard.html"; }
+    catch(e){ toast(e.message,true); }
   };
-  if (els.userSearch) els.userSearch.addEventListener('input', () => refreshList());
-
-
-  let selectedUserId = null;
-
-  function rolesFrom(prefix) {
-    const roles = [];
-    const a = prefix === 'new' ? els.newRoleAdmin : els.editRoleAdmin;
-    const i = prefix === 'new' ? els.newRoleInstructor : els.editRoleInstructor;
-    const c = prefix === 'new' ? els.newRoleCS : els.editRoleCS;
-    const t = prefix === 'new' ? els.newRoleIT : els.editRoleIT;
-    if (a.checked) roles.push('admin');
-    if (i.checked) roles.push('instructor');
-    if (c.checked) roles.push('cs');
-    if (t && t.checked) roles.push('it');
-    return roles;
-  }
-  function prettyRoles(roles) {
-    return roles.map(r => r === 'cs' ? 'Customer Service' : (r === 'instructor' ? 'Instructor' : (r === 'it' ? 'IT' : 'Admin'))).join(', ');
-  }
-
-  async function refreshList() {
-    const out = await API.get('/api/admin/users');
-    els.userList.innerHTML = '';
-    const q = (els.userSearch?.value || '').toLowerCase().trim();
-    let users = q ? out.users.filter(u => (u.name||'').toLowerCase().includes(q) || (u.username||'').toLowerCase().includes(q)) : out.users;
-    if (!me.roles.includes('it')) users = users.filter(u => !(u.roles||[]).includes('it'));
-    users.forEach(u => {
-      const row = document.createElement('div');
-      row.className = 'item';
-      row.innerHTML = `
-        <div>
-          <strong>${u.name}</strong>
-          <p style="margin:4px 0 0">${prettyRoles(u.roles)} • ${u.progressPercent}% complete</p>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <span class="badge pending">${u.roles.includes('admin') ? 'ADMIN' : 'USER'}</span>
-          <button data-open="${u.id}">Open</button>
-        </div>
-      `;
-      row.querySelector('[data-open]')?.addEventListener('click', () => openEditor(u.id));
-      els.userList.appendChild(row);
-    });
-  }
-
-  function showCreate() {
-    selectedUserId = null;
-    els.adminRightTitle.textContent = 'Create New User';
-    els.createUserPanel.classList.remove('hidden');
-    els.editUserPanel.classList.add('hidden');
-  }
-
-  async function openEditor(id) {
-    selectedUserId = id;
-    els.adminRightTitle.textContent = 'Edit User';
-    els.createUserPanel.classList.add('hidden');
-    els.editUserPanel.classList.remove('hidden');
-
-    const out = await API.get(`/api/admin/users?id=${encodeURIComponent(id)}`);
-    const u = out.user;
-
-    els.editUserName.textContent = u.name;
-    els.editUserMeta.textContent = `${prettyRoles(u.roles)} • username: ${u.username}`;
-    els.editUserBadge.textContent = u.roles.includes('admin') ? 'ADMIN' : 'USER';
-
-    els.editName.value = u.name;
-    els.editUsername.value = u.username;
-    els.editPassword.value = ''; els.editPassword.placeholder = 'Leave blank to keep unchanged';
-
-    els.editRoleAdmin.checked = u.roles.includes('admin');
-    els.editRoleInstructor.checked = u.roles.includes('instructor');
-    els.editRoleCS.checked = u.roles.includes('cs');
-
-    els.adminProgressFill.style.width = u.progressPercent + '%';
-    els.adminProgressText.textContent = `${u.progressPercent}% Complete`;
-    els.adminProgressCount.textContent = `${u.completed} / ${u.total} modules`;
-    els.adminProgressList.innerHTML = '';
-    u.modules.forEach(m => {
-      const row = document.createElement('div');
-      row.className = 'item';
-      row.innerHTML = `
-        <div><strong>${m.title}</strong><p style="margin:4px 0 0">${m.done ? 'Completed' : 'Not completed'}</p></div>
-        <span class="badge ${m.done ? 'done' : 'pending'}">${m.done ? 'DONE' : 'PENDING'}</span>
-      `;
-      els.adminProgressList.appendChild(row);
-    });
-  }
-
-  els.createUserBtn.addEventListener('click', async () => {
-    const name = els.newName.value.trim();
-    const username = els.newUsername.value.trim();
-    const password = els.newPassword.value;
-    const roles = rolesFrom('new');
-    if (!name || !username) return showOverlay('Missing info', 'Name and username are required.', 1800);
-    if (!roles.length) return showOverlay('Select roles', 'Tick at least one role.', 1800);
-    await API.post('/api/admin/users', { name, username, password, roles });
-    els.newName.value=''; els.newUsername.value=''; els.newPassword.value='';
-    els.newRoleAdmin.checked=false; els.newRoleInstructor.checked=true; els.newRoleCS.checked=false;
-    await refreshList();
-    showOverlay('Created', 'New user created.', 1400);
-  });
-
-  els.saveUserBtn.addEventListener('click', async () => {
-    if (!selectedUserId) return;
-    const name = els.editName.value.trim();
-    const username = els.editUsername.value.trim();
-    const password = els.editPassword.value; // optional (blank keeps existing)
-    const roles = rolesFrom('edit');
-    if (!name || !username) return showOverlay('Missing info', 'Name and username are required.', 1800);
-    if (!roles.length) return showOverlay('Select roles', 'Tick at least one role.', 1800);
-    await API.put('/api/admin/users', { id: selectedUserId, name, username, password, roles });
-    await refreshList();
-    await openEditor(selectedUserId);
-    showOverlay('Saved', 'User updated.', 1400);
-  });
-
-  els.resetProgressBtn.addEventListener('click', async () => {
-    if (!selectedUserId) return;
-    await API.post('/api/admin/reset-progress', { id: selectedUserId });
-    await refreshList();
-    await openEditor(selectedUserId);
-    showOverlay('Reset', 'Progress cleared.', 1500);
-  });
-
-  els.backToCreateBtn.addEventListener('click', showCreate);
-
-  await refreshList();
-  showCreate();
+  btnQuiz.onclick=()=> location.href=`/quiz.html?id=${encodeURIComponent(m.id)}`;
+  render();
 }
 
-
-
-async function itToolsInitInline(){
-  const itTab = document.getElementById('itTab');
-  let __bwItToolsLoaded = false;
-  if (!itTab) return;
-
-  // Fallback helpers (in case older app.js is missing these)
-  const _escape = (window.escapeHtml || ((s)=> (s??'').toString()
-    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;')));
-  const _roleLabel = (window.roleLabel || ((r)=>{
-    if (r==='admin') return 'Admin';
-    if (r==='instructor') return 'Instructor';
-    if (r==='cs') return 'Customer Service';
-    if (r==='it') return 'IT';
-    return r;
-  }));
-
-  itTab.innerHTML = `
-    <div class="itwrap">
-      <div class="it-left">
-        <div class="it-head">
-          <div class="it-title">IT Tools</div>
-          <div class="it-sub">Create, edit, and replace modules (including built-in ones).</div>
-        </div>
-        <input id="itSearch" class="input" placeholder="Search modules..." />
-        <div id="itModuleList" class="it-list"></div>
-      </div>
-
-      <div class="it-right">
-        <div class="it-ribbon">
-          <button id="itNewBtn" class="btn ghost" type="button">New Module</button>
-          <button id="itSaveBtn" class="btn primary" type="button">Save</button>
-          <button id="itDeleteBtn" class="btn danger" type="button">Delete</button>
-          <span id="itMeta" class="muted" style="margin-left:auto"></span>
-        </div>
-
-        <div class="it-editor card">
-          <div class="form-row two">
-            <div>
-              <label class="label">Title</label>
-              <input id="itTitle" class="input" placeholder="Module title" />
-            </div>
-            <div>
-              <label class="label">Description</label>
-              <input id="itDesc" class="input" placeholder="Short description" />
-            </div>
-          </div>
-
-          <div class="form-row">
-            <label class="label">Roles (tick all that apply)</label>
-            <div class="role-list">
-              <div class="role-item"><div class="left"><input type="checkbox" id="itRoleAdmin"><span>Admin</span></div></div>
-              <div class="role-item"><div class="left"><input type="checkbox" id="itRoleInstructor"><span>Instructor</span></div></div>
-              <div class="role-item"><div class="left"><input type="checkbox" id="itRoleCS"><span>Customer Service</span></div></div>
-              <div class="role-item"><div class="left"><input type="checkbox" id="itRoleIT"><span>IT</span></div></div>
-            </div>
-          </div>
-
-          <div class="form-row two">
-            <div>
-              <label class="label">Font</label>
-              <select id="itFont" class="input">
-                <option value="">Default</option>
-                <option value="Arial">Arial</option>
-                <option value="Calibri">Calibri</option>
-                <option value="Times New Roman">Times New Roman</option>
-                <option value="Verdana">Verdana</option>
-              </select>
-            </div>
-            <div>
-              <label class="label">Font size (px)</label>
-              <input id="itFontSize" class="input" type="number" min="10" max="32" placeholder="16" />
-            </div>
-          </div>
-
-          <div class="form-row two">
-            <div>
-              <label class="label">Text colour</label>
-              <input id="itTextColor" class="input" placeholder="#111111" />
-            </div>
-            <div>
-              <label class="label">Accent colour</label>
-              <input id="itAccentColor" class="input" placeholder="#00b4d8" />
-            </div>
-          </div>
-
-          <div class="form-row">
-            <label class="label">Content (HTML)</label>
-            <textarea id="itContent" class="textarea" placeholder="Paste HTML here (you can include images/videos via &lt;img&gt; / &lt;iframe&gt; URLs)."></textarea>
-            <div class="muted">Tip: You can embed videos with an iframe (YouTube/Vimeo) or add images using full URLs.</div>
-          </div>
-
-          <div class="form-row">
-            <label class="label">Pages (optional JSON)</label>
-            <textarea id="itPages" class="textarea" placeholder='[{"type":"rich","html":"..."},{"type":"media","kind":"image","url":"https://...","caption":"..."}]'></textarea>
-            <div class="muted">If provided, the module will use pages instead of the single content field.</div>
-          </div>
-
-          <div class="form-row">
-            <label class="label">Quiz (optional JSON)</label>
-            <textarea id="itQuiz" class="textarea" placeholder='{"title":"Quiz","questions":[{"prompt":"...","answers":[{"text":"A","isCorrect":true},{"text":"B","isCorrect":false}]}]}'></textarea>
-            <div class="muted">Quizzes require 100% pass rate (existing behavior).</div>
-          </div>
-
-          <div id="itErr" class="error"></div>
-          <div id="itOk" class="ok"></div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  const els = {
-    search: document.getElementById('itSearch'),
-    list: document.getElementById('itModuleList'),
-    meta: document.getElementById('itMeta'),
-    newBtn: document.getElementById('itNewBtn'),
-    saveBtn: document.getElementById('itSaveBtn'),
-    delBtn: document.getElementById('itDeleteBtn'),
-    title: document.getElementById('itTitle'),
-    desc: document.getElementById('itDesc'),
-    content: document.getElementById('itContent'),
-    pages: document.getElementById('itPages'),
-    quiz: document.getElementById('itQuiz'),
-    font: document.getElementById('itFont'),
-    fontSize: document.getElementById('itFontSize'),
-    textColor: document.getElementById('itTextColor'),
-    accentColor: document.getElementById('itAccentColor'),
-    rAdmin: document.getElementById('itRoleAdmin'),
-    rIns: document.getElementById('itRoleInstructor'),
-    rCs: document.getElementById('itRoleCS'),
-    rIt: document.getElementById('itRoleIT'),
-    err: document.getElementById('itErr'),
-    ok: document.getElementById('itOk'),
+async function quizInit(){
+  const root=qs("#quizRoot"); if(!root) return;
+  const me=await ensureAuthed(); if(!me){ location.href="/"; return; }
+  setTopbar(me);
+  const id=getParam("id"); if(!id){ location.href="/dashboard.html"; return; }
+  const out=await apiFetch(`/api/module?id=${encodeURIComponent(id)}`);
+  const m=out.module;
+  if (!Array.isArray(m.quiz) || !m.quiz.length){ toast("No quiz for this module",true); location.href=`/module.html?id=${encodeURIComponent(id)}`; return; }
+  qs("#quizTitle").textContent=m.title+" — Quiz";
+  const form=qs("#quizForm"); form.innerHTML="";
+  m.quiz.forEach((q, i)=>{
+    const card=document.createElement("div");
+    card.className="card"; card.style.boxShadow="none"; card.style.borderRadius="16px";
+    const answers = (q.answers||[]).slice();
+    answers.sort(()=>Math.random()-0.5);
+    card.innerHTML=`<h2 style="margin:0 0 10px 0;font-size:16px">${i+1}. ${escapeHtml(q.question)}</h2>`;
+    answers.forEach((a,ai)=>{
+      const idn=`q${i}_${ai}`;
+      const row=document.createElement("div");
+      row.style.display="flex"; row.style.gap="10px"; row.style.alignItems="center"; row.style.margin="8px 0";
+      row.innerHTML=`<input type="radio" name="q${i}" id="${idn}" value="${escapeHtml(a)}"><label for="${idn}">${escapeHtml(a)}</label>`;
+      card.appendChild(row);
+    });
+    form.appendChild(card);
+  });
+  qs("#backToModule").onclick=()=>location.href=`/module.html?id=${encodeURIComponent(id)}`;
+  qs("#submitQuiz").onclick=async ()=>{
+    for (let i=0;i<m.quiz.length;i++){
+      if(!form.querySelector(`input[name="q${i}"]:checked`)){ toast("Answer all questions",true); return; }
+    }
+    let correct=0;
+    m.quiz.forEach((q,i)=>{ const v=form.querySelector(`input[name="q${i}"]:checked`).value; if(v===q.correct) correct++; });
+    if (correct !== m.quiz.length){ toast(`You scored ${correct}/${m.quiz.length}. 100% required.`, true); return; }
+    await apiFetch("/api/progress",{method:"POST", body: JSON.stringify({moduleId:m.id, done:true, quizPassed:true})});
+    toast("Quiz passed!");
+    location.href="/dashboard.html";
   };
-
-  let all = [];
-  let selectedId = null;
-  let selectedBuiltIn = false;
-  let selectedOverridden = false;
-  let selectedCustom = false;
-
-  function clearMsg(){ els.err.textContent=''; els.ok.textContent=''; }
-  function setMsg(ok, msg){
-    if (ok){ els.ok.textContent = msg; els.err.textContent=''; }
-    else { els.err.textContent = msg; els.ok.textContent=''; }
-  }
-
-  function gatherRoles(){
-    const roles=[];
-    if (els.rAdmin.checked) roles.push('admin');
-    if (els.rIns.checked) roles.push('instructor');
-    if (els.rCs.checked) roles.push('cs');
-    if (els.rIt.checked) roles.push('it');
-    return roles;
-  }
-
-  function applyRoles(roles=[]){
-    els.rAdmin.checked = roles.includes('admin');
-    els.rIns.checked = roles.includes('instructor');
-    els.rCs.checked = roles.includes('cs');
-    els.rIt.checked = roles.includes('it');
-  }
-
-  function fillEditor(m){
-    selectedId = m?.id || null;
-    selectedBuiltIn = !!m?.builtIn;
-    selectedOverridden = !!m?.overridden;
-    selectedCustom = !!m?.custom;
-
-    els.title.value = m?.title || '';
-    els.desc.value = m?.desc || '';
-    els.content.value = m?.content || '';
-    els.pages.value = (m?.pages && m.pages.length) ? JSON.stringify(m.pages, null, 2) : '';
-    els.quiz.value = m?.quiz ? JSON.stringify(m.quiz, null, 2) : '';
-    els.font.value = m?.style?.fontFamily || '';
-    els.fontSize.value = m?.style?.fontSize || '';
-    els.textColor.value = m?.style?.textColor || '';
-    els.accentColor.value = m?.style?.accentColor || '';
-    applyRoles(m?.roles || []);
-
-    els.meta.textContent = selectedId
-      ? `${selectedBuiltIn ? 'Built-in' : 'Custom'} • id: ${selectedId}${selectedOverridden ? ' • overridden' : ''}`
-      : 'New module';
-
-    // Delete button meaning:
-    // - custom: delete
-    // - built-in overridden: revert
-    // - built-in not overridden: disabled
-    if (!selectedId){
-      els.delBtn.disabled = true;
-      els.delBtn.textContent = 'Delete';
-    }else if (!selectedBuiltIn){
-      els.delBtn.disabled = false;
-      els.delBtn.textContent = 'Delete';
-    }else if (selectedOverridden){
-      els.delBtn.disabled = false;
-      els.delBtn.textContent = 'Revert';
-    }else{
-      els.delBtn.disabled = true;
-      els.delBtn.textContent = 'Revert';
-    }
-  }
-
-  function renderList(){
-    const q = (els.search.value || '').trim().toLowerCase();
-    const items = q ? all.filter(m => (m.title||'').toLowerCase().includes(q) || (m.id||'').toLowerCase().includes(q)) : all;
-
-    els.list.innerHTML = items.map(m => {
-      const tags = [
-        m.builtIn ? 'Built-in' : 'Custom',
-        (m.overridden ? 'Replaced' : null),
-      ].filter(Boolean).join(' • ');
-      const roles = (m.roles||[]).map(_roleLabel).join(', ');
-      return `
-        <button type="button" class="it-item ${m.id===selectedId ? 'active' : ''}" data-id="${_escape(m.id)}">
-          <div class="it-item-title">${_escape(m.title)}</div>
-          <div class="it-item-sub muted">${_escape(tags)}${roles ? ' • ' + _escape(roles) : ''}</div>
-        </button>
-      `;
-    }).join('');
-
-    els.list.querySelectorAll('[data-id]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const id = btn.getAttribute('data-id');
-        const m = all.find(x=>x.id===id);
-        if (m) fillEditor(m);
-      });
-    });
-  }
-
-  async function loadAll(){
-    clearMsg();
-    const out = await API.get('/api/it/modules');
-    all = Array.isArray(out) ? out : (out.modules || []);
-    // sort: IT first, then built-in, then title
-    all.sort((a,b)=>{
-      const w=(x)=> (x.custom?0:1) + (x.overridden?2:0);
-      return (w(b)-w(a)) || (a.title||'').localeCompare(b.title||'');
-    });
-    renderList();
-  }
-
-  function buildPayload(){
-    clearMsg();
-    const title = els.title.value.trim();
-    if (!title) throw new Error('Title is required');
-    const roles = gatherRoles();
-    if (!roles.length) throw new Error('Select at least one role');
-
-    let pages = [];
-    const pagesTxt = (els.pages.value || '').trim();
-    if (pagesTxt){
-      pages = JSON.parse(pagesTxt);
-      if (!Array.isArray(pages)) throw new Error('Pages must be a JSON array');
-    }
-
-    let quiz = null;
-    const quizTxt = (els.quiz.value || '').trim();
-    if (quizTxt){
-      quiz = JSON.parse(quizTxt);
-    }
-
-    const style = {
-      fontFamily: (els.font.value || '').trim() || null,
-      fontSize: (els.fontSize.value || '').trim() || null,
-      textColor: (els.textColor.value || '').trim() || null,
-      accentColor: (els.accentColor.value || '').trim() || null,
-    };
-
-    // clean nulls
-    Object.keys(style).forEach(k=>{ if (!style[k]) delete style[k]; });
-    return {
-      id: selectedId || undefined,
-      title,
-      desc: els.desc.value.trim(),
-      roles,
-      content: els.content.value,
-      pages,
-      quiz,
-      style: Object.keys(style).length ? style : null
-    };
-  }
-
-  els.newBtn.addEventListener('click', (e)=>{
-    e.preventDefault();
-    fillEditor({ id:'', title:'', desc:'', roles:['instructor'], custom:true, builtIn:false, overridden:false, content:'', pages:[], quiz:null, style:null });
-    selectedId = null;
-    els.meta.textContent = 'New module';
-    els.delBtn.disabled = true;
-    els.delBtn.textContent = 'Delete';
-  });
-
-  els.saveBtn.addEventListener('click', async (e)=>{
-    e.preventDefault();
-    clearMsg();
-    els.saveBtn.disabled = true;
-    try{
-      const payload = buildPayload();
-      if (!selectedId){
-        // create custom
-        const out = await API.post('/api/it/modules', payload);
-        setMsg(true, 'Module created.');
-        await loadAll();
-        // select created by id if returned
-        if (out?.id){
-          const m = all.find(x=>x.id===out.id);
-          if (m) fillEditor(m);
-        }
-      }else{
-        payload.id = selectedId;
-        await API.put('/api/it/modules', payload);
-        setMsg(true, selectedBuiltIn ? 'Built-in module replaced (override saved).' : 'Module updated.');
-        await loadAll();
-        const m = all.find(x=>x.id===selectedId);
-        if (m) fillEditor(m);
-      }
-    }catch(err){
-      setMsg(false, err?.message || 'Save failed');
-    }finally{
-      els.saveBtn.disabled = false;
-    }
-  });
-
-  els.delBtn.addEventListener('click', async (e)=>{
-    e.preventDefault();
-    clearMsg();
-    if (!selectedId) return;
-    const action = (!selectedBuiltIn) ? 'delete this module' : 'revert this module to the original built-in version';
-    if (!confirm(`Are you sure you want to ${action}?`)) return;
-
-    els.delBtn.disabled = true;
-    try{
-      await API.del(`/api/it/modules?id=${encodeURIComponent(selectedId)}`);
-      setMsg(true, selectedBuiltIn ? 'Reverted to original.' : 'Deleted.');
-      selectedId = null;
-      await loadAll();
-      fillEditor({ id:'', title:'', desc:'', roles:['instructor'], custom:true, builtIn:false, overridden:false, content:'', pages:[], quiz:null, style:null });
-      selectedId = null;
-    }catch(err){
-      setMsg(false, err?.message || 'Delete failed');
-    }finally{
-      els.delBtn.disabled = false;
-    }
-  });
-
-  els.search.addEventListener('input', renderList);
-
-  // initial
-  fillEditor({ id:'', title:'', desc:'', roles:['instructor'], custom:true, builtIn:false, overridden:false, content:'', pages:[], quiz:null, style:null });
-  selectedId = null;
-  loadAll().catch(e=>setMsg(false, e.message || 'Failed to load modules'));
 }
 
-
-function slugify(s){
-  return (s||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'').slice(0,50);
-}
-
-async function itPageInit() {
-  const me = await guard(); if (!me) return;
-  if (!me.roles.includes('it')) { location.href = 'dashboard.html'; return; }
-  await topbarInit(me);
-  const host = document.getElementById('pageHost');
-  host.innerHTML = `
-    <div class="topbar" style="margin-bottom:14px">
-      <div class="brand">
-        <div class="logo"></div>
-        <div>
-          <h2 style="margin:0;color:var(--primary)">IT Tools</h2>
-          <div class="sub">Create modules & assign to roles</div>
-        </div>
-      </div>
-      <div class="pill">
-        <span id="currentUserInfo" style="font-weight:900"></span>
-        <button class="secondary" id="logoutBtn">Logout</button>
-      </div>
-    </div>
-    <div class="tabs" style="margin-bottom:14px">
-      <button class="tab-btn" onclick="location.href='dashboard.html'">Back to Dashboard</button>
-    </div>
-    <div id="itMount"></div>
-  `;
-  await itToolsWire(document.getElementById('itMount'));
-}
-
-async function itToolsWire(mount){
-  mount.innerHTML = `
-    <div class="grid">
-      <div class="card">
-        <h3 style="margin:0">Create Module</h3>
-        <p style="margin-top:6px" class="sub">Modules you create will appear for assigned roles on the Training tab.</p>
-
-        <div class="row">
-          <div><input id="itTitle" placeholder="Module title" /></div>
-          <div><input id="itId" placeholder="Optional id (leave blank to auto-generate)" /></div>
-        </div>
-
-        <div style="margin:10px 0 6px">
-          <label style="font-size:12px;color:var(--muted);font-weight:900">Assign to roles</label>
-        </div>
-
-        <div class="role-list">
-          <div class="role-item"><div class="left"><input type="checkbox" id="itRoleAdmin"><span>Admin</span></div></div>
-          <div class="role-item"><div class="left"><input type="checkbox" id="itRoleInstructor" checked><span>Instructor</span></div></div>
-          <div class="role-item"><div class="left"><input type="checkbox" id="itRoleCS"><span>Customer Service</span></div></div>
-          <div class="role-item"><div class="left"><input type="checkbox" id="itRoleIT" checked><span>IT</span></div></div>
-        </div>
-
-        <div style="margin-top:12px">
-          <textarea id="itContent" placeholder="Module content (plain text)" style="width:100%;min-height:180px;padding:12px 14px;border-radius:12px;border:1px solid rgba(0,180,216,0.18);background:rgba(255,255,255,0.85)"></textarea>
-        </div>
-
-        <button id="itCreateBtn" style="width:100%;margin-top:12px">Create Module</button>
-        <div id="itCreateMsg" class="sub" style="margin-top:10px"></div>
-      </div>
-
-      <div class="card">
-        <h3 style="margin:0">Modules</h3>
-        <p class="sub" style="margin-top:6px">Built-in modules + your custom modules.</p>
-        <div id="itModuleList" style="margin-top:12px"></div>
-      </div>
-    </div>
-  `;
-
-  async function refresh(){
-    const mods = await API.get('/api/it/modules');
-    const list = mods.map(m => {
-      const roles = (m.roles||[]).join(', ');
-      const kind = m.custom ? 'CUSTOM' : 'BUILT-IN';
-      return `
-        <div class="item">
-          <div>
-            <strong>${escapeHtml(m.title)}</strong>
-            <p style="margin:4px 0 0">${escapeHtml(kind)} • id: ${escapeHtml(m.id)} • roles: ${escapeHtml(roles)}</p>
-          </div>
-          <span class="badge ${m.custom ? 'pending' : 'done'}">${m.custom ? 'CUSTOM' : 'CORE'}</span>
-        </div>
-      `;
-    }).join('');
-    document.getElementById('itModuleList').innerHTML = list || '<div class="sub">No modules.</div>';
-  }
-
-  await refresh();
-
-  document.getElementById('itCreateBtn').addEventListener('click', async () => {
-    const title = document.getElementById('itTitle').value.trim();
-    const idRaw = document.getElementById('itId').value.trim();
-    const content = document.getElementById('itContent').value.trim();
-    const roles = [];
-    if (document.getElementById('itRoleAdmin').checked) roles.push('admin');
-    if (document.getElementById('itRoleInstructor').checked) roles.push('instructor');
-    if (document.getElementById('itRoleCS').checked) roles.push('cs');
-    if (document.getElementById('itRoleIT').checked) roles.push('it');
-
-    const msg = document.getElementById('itCreateMsg');
-    msg.textContent = '';
-
-    if (!title) return msg.textContent = 'Title is required.';
-    if (!content) return msg.textContent = 'Content is required.';
-    if (!roles.length) return msg.textContent = 'Select at least one role.';
-
-    const id = idRaw || slugify(title);
-
-    try{
-      await API.post('/api/it/modules', { title, id, content, roles });
-      msg.textContent = 'Created.';
-      document.getElementById('itTitle').value='';
-      document.getElementById('itId').value='';
-      document.getElementById('itContent').value='';
-      await refresh();
-    }catch(e){
-      msg.textContent = (e && e.message) ? e.message : 'Failed.';
-    }
-  });
-}
+document.addEventListener("DOMContentLoaded", ()=>{
+  loginInit(); dashboardInit(); moduleInit(); quizInit();
+});

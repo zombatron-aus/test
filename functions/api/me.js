@@ -1,6 +1,6 @@
-import { json } from "./_helpers.js";
-
-export async function onRequestGet({ data, request }) {
-  const u = data.user;
-  return json({ id: u.id, name: u.name, username: u.username, roles: u.roles || [] }, 200, {}, request);
+import { json, requireUser } from "./_helpers.js";
+export async function onRequestGet({ request, env }){
+  const user=await requireUser(env, request);
+  if(!user) return json({error:"Unauthorized"},401);
+  return json({ id:user.id, name:user.name, username:user.username, roles:user.roles });
 }

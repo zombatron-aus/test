@@ -1,66 +1,55 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bright Waves – Login</title>
-  <link rel="stylesheet" href="/assets/styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bright Waves — Login</title>
+  <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
-  <div class="container">
-    <div class="grid">
-      <div class="card">
-        <div class="brand" style="margin-bottom:10px">
-          <div class="logo" aria-hidden="true"></div>
-          <div>
-            <h2 style="margin:0;color:var(--primary)">Bright Waves</h2>
-            <p style="margin:0">Staff Training & Manual Portal</p>
-          </div>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>Bright Waves</h1>
+          <p>Staff Training & Manual Portal</p>
         </div>
-
-        <h3 style="margin-top:10px">Sign in</h3>
-        <input id="username" placeholder="Username" autocomplete="username" />
-        <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
-        <button id="loginBtn" style="width:100%">Login</button>
-        <p id="error" style="color:var(--danger);font-weight:900"></p>
-
-        <hr />
-        <p style="margin:0"><small><strong>Temporary setup logins</strong><br>
-          Admin: admin / admin123<br>
-          Instructor: instructor / teach123<br>
-          CS: cs / cs123
-IT: it / it123</small></p>
       </div>
+      <div class="spacer"></div>
+    </div>
+  </div>
 
+  <div class="container">
+    <div class="grid two">
       <div class="card">
-        <h3>How it works</h3>
-        <p>Progress is stored in Cloudflare KV. Staff can resume after refresh and across devices.</p>
-        <div class="item" style="background:#fff">
-          <div>
-            <strong>Intro first</strong>
-            <p style="margin:4px 0 0">Complete the introduction module to unlock training.</p>
+        <h2>Sign in</h2>
+        <p>Use your username and password.</p>
+        <form id="loginForm">
+          <div class="field">
+            <label>Username</label>
+            <input class="input" id="username" autocomplete="username">
           </div>
-          <span class="badge lock">LOCKED</span>
-        </div>
-        <div class="item" style="background:#fff">
-          <div>
-            <strong>Anti-cheat quizzes</strong>
-            <p style="margin:4px 0 0">Quizzes run on a separate page with shuffled answers.</p>
+          <div class="field">
+            <label>Password</label>
+            <input class="input" id="password" type="password" autocomplete="current-password">
           </div>
-          <span class="badge pending">QUIZ</span>
-        </div>
-        <div class="item" style="background:#fff">
-          <div>
-            <strong>Managers</strong>
-            <p style="margin:4px 0 0">Admin panel supports multi-role accounts and progress audit.</p>
-          </div>
-          <span class="badge done">ADMIN</span>
-        </div>
+          <button class="btn" style="width:100%" type="submit">Login</button>
+        </form>
+        <hr class="sep">
+        <div class="small"><b>Temporary setup logins</b><br>
+        Admin: <code>admin / admin123</code><br>
+        Instructor: <code>instructor / teach123</code><br>
+        CS: <code>cs / cs123</code><br>
+        IT: <code>it / it123</code></div>
+      </div>
+      <div class="card">
+        <h2>Intro first</h2>
+        <p>Complete the Introduction module to unlock training.</p>
       </div>
     </div>
   </div>
 
   <script src="/assets/app.js"></script>
-  <script>loginPageInit();</script>
 </body>
 </html>
