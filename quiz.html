@@ -1,45 +1,123 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bright Waves — Quiz</title>
-  <link rel="stylesheet" href="/assets/styles.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Quiz</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+  
 </head>
 <body>
-
   <div class="topbar">
-    <div class="topbar-inner">
-      <a class="brand" href="/dashboard.html" aria-label="Bright Waves Home">
+    <div class="brand">
+      <a href="/dashboard" class="brand" style="color:inherit">
         <div class="logo"></div>
         <div>
           <h1>Bright Waves</h1>
-          <p>Staff Training & Manual Portal</p>
+          <div class="sub" id="sub">Quiz</div>
         </div>
       </a>
-      <div class="spacer"></div>
-      <div class="pill">
-        <div class="who" id="who"></div>
-        <button class="btn secondary" id="logoutBtn" type="button">Logout</button>
-      </div>
+    </div>
+    <div class="pill">
+      <div class="small" id="who"></div>
+      <button class="btn secondary" onclick="logout()">Logout</button>
     </div>
   </div>
-        
-
-<div class="container" id="quizRoot">
-  <div class="card">
-    <h2 id="quizTitle">Quiz</h2>
-    <p>Answer all questions. You must score 100% to pass.</p>
-    <hr class="sep">
-    <div id="quizForm" class="grid" style="gap:14px"></div>
-    <hr class="sep">
-    <div class="row">
-      <button class="btn secondary" id="backToModule" type="button">Back to Module</button>
-      <button class="btn" id="submitQuiz" type="button">Submit</button>
+  <div class="container" style="max-width:920px">
+    <div class="card" id="card">
+      <h2 id="title">Loading…</h2>
+      <div class="muted" id="desc"></div>
+      <div class="hr"></div>
+      <div id="qWrap"></div>
+      <div class="hr"></div>
+      <button class="btn" id="submitBtn" style="width:100%">Submit Quiz</button>
+      <div id="msg" class="small" style="margin-top:10px"></div>
+      <div style="height:8px"></div>
+      <button class="btn ghost" onclick="location.href='/module?id='+encodeURIComponent(qs('id'))" style="width:100%">Back to module</button>
     </div>
   </div>
-</div>
+<script>
+(async ()=>{
+  const me = await requireAuth();
+  setText('who', `${me.name} • ${me.roles.map(roleLabel).join(', ')}`);
+  const id = qs('id');
+  if(!id){ location.href='/dashboard'; return; }
+  const elig = await API.get('/api/quiz-eligibility?id='+encodeURIComponent(id));
+  if(!elig.ok){
+    document.getElementById('qWrap').innerHTML = `<div class="notice"><b>Quiz locked.</b><div class="small">${escapeHtml(elig.reason||'')}</div></div>`;
+    document.getElementById('submitBtn').disabled = true;
+    return;
+  }
+  const data = await API.get('/api/quiz?id='+encodeURIComponent(id));
+  const m = data.module;
+  document.getElementById('title').textContent = m.title + ' — Quiz';
+  document.getElementById('sub').textContent = m.title + ' — Quiz';
+  document.getElementById('desc').textContent = 'Pass rate: 100%';
+  const s = m.styling||{};
+  const card = document.getElementById('card');
+  card.style.fontFamily = s.font || '';
+  card.style.fontSize = (s.baseSize||14)+'px';
+  card.style.color = s.textColor || '';
+  document.documentElement.style.setProperty('--accent', s.accentColor || '#0b76b7');
 
-<script src="/assets/app.js"></script>
+  const questions = data.questions || [];
+  const wrap = document.getElementById('qWrap');
+  wrap.innerHTML='';
+  const state = [];
+  questions.forEach((q,qi)=>{
+    const box = document.createElement('div');
+    box.className='card';
+    box.style.boxShadow='none';
+    box.style.border='1px solid var(--border)';
+    box.style.margin='0 0 12px 0';
+    box.innerHTML = `<b>${escapeHtml(q.q)}</b><div style="height:8px"></div>`;
+    const opts = document.createElement('div');
+    opts.className='list';
+    q.answers.forEach((a,ai)=>{
+      const idr = `q${qi}_${ai}`;
+      const row = document.createElement('label');
+      row.className='item';
+      row.style.justifyContent='flex-start';
+      row.innerHTML = `<input type="radio" name="q${qi}" value="${ai}" style="margin-right:10px"> <span>${escapeHtml(a)}</span>`;
+      opts.appendChild(row);
+    });
+    box.appendChild(opts);
+    wrap.appendChild(box);
+    state.push({selected:null});
+  });
+
+  document.getElementById('submitBtn').onclick = async ()=>{
+    const answers=[];
+    for(let i=0;i<questions.length;i++){
+      const sel = document.querySelector(`input[name="q${i}"]:checked`);
+      answers.push(sel ? Number(sel.value) : null);
+    }
+    if(answers.some(a=>a===null)){
+      document.getElementById('msg').style.color='#b91c1c';
+      document.getElementById('msg').textContent='Please answer every question.';
+      return;
+    }
+    document.getElementById('submitBtn').disabled = true;
+    try{
+      const res = await API.post('/api/quiz/submit',{moduleId:id, answers});
+      if(res.passed){
+        document.getElementById('msg').style.color='green';
+        document.getElementById('msg').textContent='Passed! Returning to dashboard…';
+        setTimeout(()=>location.href='/dashboard', 900);
+      }else{
+        document.getElementById('msg').style.color='#b91c1c';
+        document.getElementById('msg').textContent='Not quite. You must score 100%. Please try again.';
+        document.getElementById('submitBtn').disabled = false;
+      }
+    }catch(e){
+      document.getElementById('msg').style.color='#b91c1c';
+      document.getElementById('msg').textContent = e.message || String(e);
+      document.getElementById('submitBtn').disabled = false;
+    }
+  };
+})();
+</script>
+
+<script src="/assets/client.js"></script>
 </body>
 </html>

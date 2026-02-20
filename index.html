@@ -1,55 +1,82 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Bright Waves — Login</title>
-  <link rel="stylesheet" href="/assets/styles.css">
+  <link rel="stylesheet" href="/assets/styles.css" />
+  
 </head>
 <body>
   <div class="topbar">
-    <div class="topbar-inner">
-      <div class="brand">
-        <div class="logo"></div>
-        <div>
-          <h1>Bright Waves</h1>
-          <p>Staff Training & Manual Portal</p>
-        </div>
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+      <div>
+        <h1>Bright Waves</h1>
+        <div class="sub">Staff Training & Manual Portal</div>
       </div>
-      <div class="spacer"></div>
     </div>
+    <div class="pill small">Hosted on Cloudflare Pages + KV</div>
   </div>
-
   <div class="container">
     <div class="grid two">
       <div class="card">
         <h2>Sign in</h2>
-        <p>Use your username and password.</p>
-        <form id="loginForm">
-          <div class="field">
-            <label>Username</label>
-            <input class="input" id="username" autocomplete="username">
-          </div>
-          <div class="field">
-            <label>Password</label>
-            <input class="input" id="password" type="password" autocomplete="current-password">
-          </div>
-          <button class="btn" style="width:100%" type="submit">Login</button>
-        </form>
-        <hr class="sep">
-        <div class="small"><b>Temporary setup logins</b><br>
-        Admin: <code>admin / admin123</code><br>
-        Instructor: <code>instructor / teach123</code><br>
-        CS: <code>cs / cs123</code><br>
-        IT: <code>it / it123</code></div>
+        <div class="muted">Use your username and password.</div>
+        <div class="hr"></div>
+        <div class="row">
+          <input id="u" class="input" placeholder="Username" autocomplete="username" />
+          <input id="p" class="input" placeholder="Password" type="password" autocomplete="current-password" />
+        </div>
+        <div style="height:10px"></div>
+        <button class="btn" id="loginBtn" style="width:100%">Login</button>
+        <div id="err" class="small" style="margin-top:10px;color:#b91c1c"></div>
+        <div class="hr"></div>
+        <div class="notice small">
+          <div><b>Default setup logins</b> (change after first login)</div>
+          <div class="kbd">IT: it / it123</div>
+          <div class="kbd">Admin: admin / admin123</div>
+          <div class="kbd">Instructor: instructor / teach123</div>
+          <div class="kbd">Customer Service: cs / cs123</div>
+        </div>
       </div>
       <div class="card">
-        <h2>Intro first</h2>
-        <p>Complete the Introduction module to unlock training.</p>
+        <h2>How it works</h2>
+        <div class="muted">All modules are created and managed by the IT account. Staff progress is stored in Cloudflare KV.</div>
+        <div class="hr"></div>
+        <div class="list">
+          <div class="item"><div><b>No hardcoded modules</b><div class="small">Modules only exist if IT creates them.</div></div><span class="badge">Dynamic</span></div>
+          <div class="item"><div><b>Intro/Required gating</b><div class="small">IT can mark modules as required-first to lock others until completed.</div></div><span class="badge">Anti-skip</span></div>
+          <div class="item"><div><b>Quizzes</b><div class="small">Optional quiz after module. Shuffle answers + 100% pass support.</div></div><span class="badge">Quiz</span></div>
+          <div class="item"><div><b>Admin & IT</b><div class="small">Admin manages users/progress. IT builds modules & controls IT role.</div></div><span class="badge">RBAC</span></div>
+        </div>
       </div>
     </div>
   </div>
+<script>
+(async ()=>{
+  const btn = document.getElementById('loginBtn');
+  btn.onclick = async ()=>{
+    setText('err','');
+    btn.disabled = true;
+    try{
+      const username = document.getElementById('u').value.trim();
+      const password = document.getElementById('p').value;
+      const out = await API.post('/api/login',{username,password});
+      if(out.mustReset){
+        location.href = '/set-password?next=' + encodeURIComponent(qs('next')||'/dashboard');
+        return;
+      }
+      location.href = qs('next')||'/dashboard';
+    }catch(e){
+      setText('err', e.message || String(e));
+    }finally{
+      btn.disabled = false;
+    }
+  };
+})();
+</script>
 
-  <script src="/assets/app.js"></script>
+<script src="/assets/client.js"></script>
 </body>
 </html>

@@ -1,26 +1,17 @@
-import { json, seedIfNeeded, loadUserById, saveUser } from "../_helpers.js";
+import { json, requireUser, requireRole, loadUserById, saveProgress } from "../_helpers.js";
 
-function requireAdmin(user) {
-    return user?.roles?.includes("admin") || user?.roles?.includes("it");
-}
+export async function onRequestPost({request, env}){
+  const {user} = await requireUser(env, request);
+  if(!user) return json({error:"Unauthorized"}, 401);
+  if(!requireRole(user,'admin') && !requireRole(user,'it')) return json({error:"Forbidden"}, 403);
 
-export async function onRequestPost({ request, env, data }) {
-  const admin = data.user;
-  if (!requireAdmin(admin)) return json({ error: "Forbidden" }, 403);
-  await seedIfNeeded(env);
+  let body={}; try{ body=await request.json(); }catch(e){}
+  const target = await loadUserById(env, body.id);
+  if(!target) return json({error:"Not found"}, 404);
 
-  const body = await request.json().catch(()=> ({}));
-  const id = body.id;
-  if (!id) return json({ error:"Missing user id" }, 400);
+  // Admin cannot reset IT? allow only IT
+  if(target.roles.includes('it') && !requireRole(user,'it')) return json({error:"Only IT can reset IT progress."}, 403);
 
-  const u = await loadUserById(env, id);
-  if (!u) return json({ error:"User not found" }, 404);
-  if (!admin?.roles?.includes('it') && (u.roles || []).includes('it')) return json({ error: 'Forbidden' }, 403);
-
-  u.progress = {};
-  u.ack = {};
-  u.viewed = {};
-  await saveUser(env, u);
-
-  return json({ ok:true });
+  await saveProgress(env, target.id, {});
+  return json({ok:true}, 200);
 }
