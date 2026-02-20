@@ -212,35 +212,65 @@ export async function getCustomModules(env){
   }
 }
 
-export async function getAllModules(env){
+export async function getOverrides(env){
+  const raw = await env.BW_LMS.get('modules:overrides');
+  if (!raw) return {};
+  try{
+    const obj = JSON.parse(raw);
+    return obj && typeof obj === 'object' ? obj : {};
+  }catch(_){
+    return {};
+  }
+}
+
+export async function saveOverrideModule(env, module){
+  const overrides = await getOverrides(env);
+  overrides[module.id] = module;
+  await env.BW_LMS.put('modules:overrides', JSON.stringify(overrides));
+  return { ok:true };
+}
+
+export async function deleteOverrideModule(env, id){
+  const overrides = await getOverrides(env);
+  if (overrides && overrides[id]){
+    delete overrides[id];
+    await env.BW_LMS.put('modules:overrides', JSON.stringify(overrides));
+  }
+  return { ok:true };
+}
+
+async function getAllModules(env){
+  const overrides = await getOverrides(env);
   const custom = await getCustomModules(env);
   const safeCustom = custom.map(m => ({...m, custom:true, type: m.type || 'content'}));
-  // avoid id collisions with core modules
+
   const coreIds = new Set(MODULES.map(m => m.id));
-  const filtered = safeCustom.filter(m => m && m.id && !coreIds.has(m.id));
-  return [...MODULES, ...filtered];
+  const mergedCore = MODULES.map(m => {
+    const o = overrides[m.id];
+    if (!o) return {...m, builtIn:true, overridden:false};
+    // override replaces built-in (but keep id stable)
+    return {...m, ...o, id: m.id, builtIn:true, overridden:true};
+  });
+
+  // avoid id collisions with core modules
+  const filteredCustom = safeCustom.filter(m => m && m.id && !coreIds.has(m.id));
+  return [...mergedCore, ...filteredCustom];
 }
 
 export async function saveCustomModule(env, module){
   const all = await getCustomModules(env);
   const next = all.filter(m => m.id !== module.id);
-
   next.push({
     id: module.id,
     title: module.title,
     desc: module.desc || "",
-    roles: module.roles,
-    custom: true,
-
-    // v2 schema
+    roles: module.roles || [],
+    type: module.type || 'content',
+    content: module.content || "",
     pages: Array.isArray(module.pages) ? module.pages : [],
-    style: module.style || null,
     quiz: module.quiz || null,
-
-    // legacy fallback (used if pages empty)
-    content: module.content || ""
+    style: module.style || null
   });
-
   await env.BW_LMS.put('modules:custom', JSON.stringify(next));
   return { ok:true };
 }

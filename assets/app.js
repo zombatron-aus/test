@@ -30,30 +30,8 @@ const API = {
   get(path) { return this.request(path); },
   post(path, body) { return this.request(path, { method: 'POST', body: JSON.stringify(body || {}) }); },
   put(path, body) { return this.request(path, { method: 'PUT', body: JSON.stringify(body || {}) }); },
+  del(path) { return this.request(path, { method: 'DELETE' }); },
 };
-
-
-function escapeHtml(input) {
-  const s = (input ?? "").toString();
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function roleLabel(r){
-  const v=(r||'').toString().toLowerCase();
-  if (v==='cs' || v==='customer_service' || v==='customer service') return 'Customer Service';
-  if (v==='it' || v==='it_support' || v==='it support') return 'IT';
-  if (v==='admin') return 'Admin';
-  if (v==='instructor' || v==='swim_instructor' || v==='swim instructor') return 'Instructor';
-  // title-case fallback
-  return v.replace(/[_-]+/g,' ').replace(/\b\w/g, ch => ch.toUpperCase());
-}
-
-
 
 function qs(name) { return new URLSearchParams(location.search).get(name); }
 
@@ -138,7 +116,6 @@ async function dashboardInit() {
   const itTabBtn = document.getElementById('itTabBtn');  const trainingTab = document.getElementById('trainingTab');
   const adminTab = document.getElementById('adminTab');
   const itTab = document.getElementById('itTab');
-
   let __bwItToolsLoaded = false;
 
   function switchTab(tab) {
@@ -167,13 +144,13 @@ async function dashboardInit() {
   }
 trainingTabBtn.addEventListener('click', () => switchTab('training'));
   adminTabBtn.addEventListener('click', () => switchTab('admin'));
-  if (itTabBtn) itTabBtn.addEventListener('click', async () => {
-    switchTab('it');
-    if (!__bwItToolsLoaded) {
-      __bwItToolsLoaded = true;
-      try { await itToolsInitInline(); } catch(e) { console.error(e); }
-    }
-  });
+  if (itTabBtn) itTabBtn.addEventListener('click', () => {
+      switchTab('it');
+      if (!__bwItToolsLoaded) {
+        __bwItToolsLoaded = true;
+        try { itToolsInitInline(); } catch(e) { console.error(e); }
+      }
+    });
   switchTab('training');
 
   const [mods, prog] = await Promise.all([API.get('/api/modules'), API.get('/api/progress')]);
@@ -245,95 +222,7 @@ async function moduleInit() {
   const host = document.getElementById('pageHost');
   host.innerHTML = '';
 
-
-  // Custom modules created via IT Tools (multi-page, rich content)
-  if (m.custom) {
-    // apply style if provided
-    const style = m.style || {};
-    const fontFamily = style.fontFamily || "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
-    const baseFontPx = Number(style.baseFontPx || 16);
-    const textColor = style.textColor || "#0f172a";
-    const accentColor = style.accentColor || "var(--primary)";
-
-    const pages = Array.isArray(m.pages) && m.pages.length ? m.pages : [{
-      id: "p1", type: "richtext", title: m.title, html: (m.content || "").replaceAll("\n","<br>")
-    }];
-
-    let pageIdx = 0;
-
-    const renderPage = () => {
-      const p = pages[pageIdx];
-      const card = document.createElement('div');
-      card.className = 'card';
-      card.style.fontFamily = fontFamily;
-      card.style.fontSize = `${baseFontPx}px`;
-      card.style.color = textColor;
-
-      const header = `
-        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px">
-          <div>
-            <h2 style="margin:0;color:${accentColor}">${escapeHtml(m.title)}</h2>
-            <div class="muted" style="margin-top:6px">${escapeHtml(p.title || '')}</div>
-          </div>
-          <div class="muted">${pageIdx+1} / ${pages.length}</div>
-        </div>
-        <div class="progress" style="margin-top:12px"><div class="bar" style="width:${Math.round(((pageIdx+1)/pages.length)*100)}%"></div></div>
-      `;
-
-      let body = '';
-      if (p.type === 'media') {
-        const u = p.url || '';
-        if ((p.mediaType || 'image') === 'video') {
-          body = `<div style="margin-top:14px">
-            <div style="position:relative;padding-top:56.25%;border-radius:14px;overflow:hidden;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7)">
-              <iframe src="${escapeHtml(u)}" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-            </div>
-            ${p.caption ? `<div class="muted" style="margin-top:10px">${escapeHtml(p.caption)}</div>` : ``}
-          </div>`;
-        } else {
-          body = `<div style="margin-top:14px">
-            <img src="${escapeHtml(u)}" alt="" style="width:100%;max-height:520px;object-fit:contain;border-radius:14px;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7)">
-            ${p.caption ? `<div class="muted" style="margin-top:10px">${escapeHtml(p.caption)}</div>` : ``}
-          </div>`;
-        }
-      } else {
-        body = `<div style="margin-top:14px">${p.html || ''}</div>`;
-      }
-
-      const nav = document.createElement('div');
-      nav.className = 'row';
-      nav.style.marginTop = '14px';
-      nav.innerHTML = `
-        <div><button class="secondary" id="custBack" style="width:100%" ${pageIdx===0?'disabled':''}>Back</button></div>
-        <div><button id="custNext" style="width:100%">${pageIdx===pages.length-1 ? (m.quiz ? 'Acknowledge & Start Quiz' : 'Acknowledge & Finish') : 'Next'}</button></div>
-      `;
-
-      card.innerHTML = header + body;
-      host.innerHTML = '';
-      host.appendChild(card);
-      host.appendChild(nav);
-
-      nav.querySelector('#custBack').addEventListener('click', () => {
-        if (pageIdx>0) { pageIdx--; renderPage(); }
-      });
-
-      nav.querySelector('#custNext').addEventListener('click', async () => {
-        if (pageIdx < pages.length-1) { pageIdx++; renderPage(); return; }
-        // last page: acknowledge
-        await API.post('/api/ack', { moduleId });
-        if (m.quiz) {
-          location.href = `quiz.html?id=${encodeURIComponent(moduleId)}`;
-        } else {
-          await API.post('/api/complete-module', { moduleId });
-          showOverlay('Completed', 'Module completed.', 1400);
-          setTimeout(() => location.href = 'dashboard.html', 450);
-        }
-      });
-    };
-
-    renderPage();
-    return;
-  }  if (m.id === 'vision') {
+  if (m.id === 'vision') {
     const wrap = document.createElement('div');
     wrap.className = 'card vision-shell';
     wrap.innerHTML = `
@@ -456,88 +345,6 @@ async function quizInit() {
   const m = mods.find(x => x.id === moduleId);
   if (!m || !m.quiz) { location.href = 'dashboard.html'; return; }
 
-  // New quiz schema (multi-question)
-  if (m.quiz.questions && Array.isArray(m.quiz.questions)) {
-    const host = document.getElementById('pageHost');
-    host.innerHTML = '';
-
-    const wrap = document.createElement('div');
-    wrap.className = 'card';
-    wrap.innerHTML = `
-      <h2 style="color:var(--primary)">${escapeHtml(m.title)} – Quiz</h2>
-      <p class="muted" style="margin-bottom:12px">You must score 100% to pass.</p>
-      <div id="quizQs"></div>
-      <div class="row" style="margin-top:14px">
-        <div><button class="secondary" id="quizBackBtn" style="width:100%">Back</button></div>
-        <div><button id="quizSubmitBtn" style="width:100%">Submit</button></div>
-      </div>
-      <div class="error" id="quizErr"></div>
-    `;
-    host.appendChild(wrap);
-
-    const qsHost = wrap.querySelector('#quizQs');
-    const err = wrap.querySelector('#quizErr');
-
-    // render questions with randomized answer order
-    const rendered = m.quiz.questions.map((q, qi) => {
-      const answers = (q.answers || []).map(a => ({...a}));
-      for (let i = answers.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [answers[i], answers[j]] = [answers[j], answers[i]];
-      }
-      const qWrap = document.createElement('div');
-      qWrap.className = 'it-card';
-      qWrap.style.marginBottom = '12px';
-      qWrap.innerHTML = `
-        <div style="font-weight:900;margin-bottom:8px">${qi+1}. ${escapeHtml(q.prompt)}</div>
-        <div class="progress-list" style="margin-top:0"></div>
-      `;
-      const list = qWrap.querySelector('.progress-list');
-      answers.forEach(a => {
-        const lab = document.createElement('label');
-        lab.className = 'quiz-opt';
-        lab.style.display='flex';
-        lab.style.gap='10px';
-        lab.style.alignItems='center';
-        lab.style.padding='8px 10px';
-        lab.style.borderRadius='12px';
-        lab.style.border='1px solid rgba(0,0,0,0.08)';
-        lab.style.background='rgba(255,255,255,0.75)';
-        lab.innerHTML = `<input type="radio" name="q${qi}" value="${escapeHtml(a.id)}"> <span>${escapeHtml(a.text)}</span>`;
-        list.appendChild(lab);
-      });
-      qsHost.appendChild(qWrap);
-      return { q, answers };
-    });
-
-    wrap.querySelector('#quizBackBtn').addEventListener('click', () => {
-      location.href = `module.html?id=${encodeURIComponent(moduleId)}`;
-    });
-
-    wrap.querySelector('#quizSubmitBtn').addEventListener('click', async () => {
-      err.textContent='';
-      const picked = rendered.map((_, qi) => wrap.querySelector(`input[name="q${qi}"]:checked`)?.value || null);
-      if (picked.some(v => !v)) { err.textContent = 'Please answer every question.'; return; }
-
-      let correct = 0;
-      rendered.forEach((r, qi) => {
-        if (picked[qi] === r.q.correctAnswerId) correct++;
-      });
-      const score = Math.round((correct / rendered.length) * 100);
-
-      if (score === 100) {
-        await API.post('/api/complete-module', { moduleId });
-        showOverlay('Nice work!', 'Quiz passed — module completed.', 1500);
-        setTimeout(() => location.href = 'dashboard.html', 450);
-      } else {
-        err.textContent = `You must score 100% to pass. You scored ${score}%. Try again.`;
-      }
-    });
-
-    return;
-  }
-
-
   const indices = m.quiz.opts.map((_, idx) => idx);
   for (let i = indices.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -592,7 +399,6 @@ async function adminPageInit() {
 async function adminPanelInitInline() {
   const adminTab = document.getElementById('adminTab');
   const itTab = document.getElementById('itTab');
-
   let __bwItToolsLoaded = false;
   if (!adminTab) return;
   adminTab.innerHTML = `<div id="adminMount"></div>`;
@@ -881,580 +687,357 @@ async function adminPanelWire(mount) {
 
 
 async function itToolsInitInline(){
+  const itTab = document.getElementById('itTab');
+  let __bwItToolsLoaded = false;
+  if (!itTab) return;
 
-  const me = await API.get('/api/me');
-  if (!me.roles.includes('it')) {
-    itTab.innerHTML = `<div class="card"><h2>IT Tools</h2><div class="error">Forbidden</div></div>`;
-    return;
-  }
-
-  // Simple rich text helpers (execCommand is deprecated but still widely supported in browsers)
-  const cmd = (c, v=null) => { try { document.execCommand(c, false, v); } catch(e){} };
-  const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : `m_${Math.random().toString(16).slice(2)}_${Date.now()}`);
+  // Fallback helpers (in case older app.js is missing these)
+  const _escape = (window.escapeHtml || ((s)=> (s??'').toString()
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;')));
+  const _roleLabel = (window.roleLabel || ((r)=>{
+    if (r==='admin') return 'Admin';
+    if (r==='instructor') return 'Instructor';
+    if (r==='cs') return 'Customer Service';
+    if (r==='it') return 'IT';
+    return r;
+  }));
 
   itTab.innerHTML = `
-    <div class="panel-grid it-word">
-      <div class="card">
-        <h2>IT Tools</h2>
-        <p class="muted">Create multi-page modules with rich text, media, styling, and an end-of-module quiz.</p>
+    <div class="itwrap">
+      <div class="it-left">
+        <div class="it-head">
+          <div class="it-title">IT Tools</div>
+          <div class="it-sub">Create, edit, and replace modules (including built-in ones).</div>
+        </div>
+        <input id="itSearch" class="input" placeholder="Search modules..." />
+        <div id="itModuleList" class="it-list"></div>
+      </div>
 
-        <div class="form-row">
-          <label class="label">Title</label>
-          <input id="itModTitle" class="input" placeholder="e.g., Pool Safety">
+      <div class="it-right">
+        <div class="it-ribbon">
+          <button id="itNewBtn" class="btn ghost" type="button">New Module</button>
+          <button id="itSaveBtn" class="btn primary" type="button">Save</button>
+          <button id="itDeleteBtn" class="btn danger" type="button">Delete</button>
+          <span id="itMeta" class="muted" style="margin-left:auto"></span>
         </div>
 
-        <div class="form-row">
-          <label class="label">Description</label>
-          <input id="itModDesc" class="input" placeholder="Shown on the dashboard">
-        </div>
-
-        <div class="form-row">
-          <div class="muted" style="font-weight:800;margin-bottom:8px">Roles (tick all that apply)</div>
-          <div class="role-list">
-            <div class="role-item"><div class="left"><input type="checkbox" id="itRoleInstructor"><span>Instructor</span></div></div>
-            <div class="role-item"><div class="left"><input type="checkbox" id="itRoleCS"><span>Customer Service</span></div></div>
-            <div class="role-item"><div class="left"><input type="checkbox" id="itRoleAdmin"><span>Admin</span></div></div>
-            <div class="role-item"><div class="left"><input type="checkbox" id="itRoleIT"><span>IT</span></div></div>
+        <div class="it-editor card">
+          <div class="form-row two">
+            <div>
+              <label class="label">Title</label>
+              <input id="itTitle" class="input" placeholder="Module title" />
+            </div>
+            <div>
+              <label class="label">Description</label>
+              <input id="itDesc" class="input" placeholder="Short description" />
+            </div>
           </div>
-        </div>
 
-        <div class="form-row">
-          <div class="muted" style="font-weight:800;margin-bottom:8px">Module styling</div>
+          <div class="form-row">
+            <label class="label">Roles (tick all that apply)</label>
+            <div class="role-list">
+              <div class="role-item"><div class="left"><input type="checkbox" id="itRoleAdmin"><span>Admin</span></div></div>
+              <div class="role-item"><div class="left"><input type="checkbox" id="itRoleInstructor"><span>Instructor</span></div></div>
+              <div class="role-item"><div class="left"><input type="checkbox" id="itRoleCS"><span>Customer Service</span></div></div>
+              <div class="role-item"><div class="left"><input type="checkbox" id="itRoleIT"><span>IT</span></div></div>
+            </div>
+          </div>
+
           <div class="form-row two">
             <div>
               <label class="label">Font</label>
               <select id="itFont" class="input">
-                <option value="system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif">System</option>
-                <option value="Arial, Helvetica, sans-serif">Arial</option>
-                <option value="Georgia, serif">Georgia</option>
-                <option value="Trebuchet MS, Arial, sans-serif">Trebuchet</option>
-                <option value="Verdana, Arial, sans-serif">Verdana</option>
+                <option value="">Default</option>
+                <option value="Arial">Arial</option>
+                <option value="Calibri">Calibri</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Verdana">Verdana</option>
               </select>
             </div>
             <div>
-              <label class="label">Base size</label>
-              <select id="itFontSize" class="input">
-                <option value="14">14px</option>
-                <option value="16" selected>16px</option>
-                <option value="18">18px</option>
-                <option value="20">20px</option>
-              </select>
+              <label class="label">Font size (px)</label>
+              <input id="itFontSize" class="input" type="number" min="10" max="32" placeholder="16" />
             </div>
           </div>
+
           <div class="form-row two">
             <div>
               <label class="label">Text colour</label>
-              <input id="itTextColor" class="input" type="color" value="#0f172a">
+              <input id="itTextColor" class="input" placeholder="#111111" />
             </div>
             <div>
               <label class="label">Accent colour</label>
-              <input id="itAccentColor" class="input" type="color" value="#06b6d4">
+              <input id="itAccentColor" class="input" placeholder="#00b4d8" />
             </div>
           </div>
-        </div>
 
-        <div class="form-row">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-            <div>
-              <div class="muted" style="font-weight:900">Pages</div>
-              <div class="muted">Add multiple pages. Staff will click Next/Back.</div>
-            </div>
-            <button id="itAddPageBtn" type="button" class="btn ghost">+ Add Page</button>
+          <div class="form-row">
+            <label class="label">Content (HTML)</label>
+            <textarea id="itContent" class="textarea" placeholder="Paste HTML here (you can include images/videos via &lt;img&gt; / &lt;iframe&gt; URLs)."></textarea>
+            <div class="muted">Tip: You can embed videos with an iframe (YouTube/Vimeo) or add images using full URLs.</div>
           </div>
-          <div id="itPagesList" class="progress-list" style="margin-top:10px"></div>
-        </div>
 
-        <div class="form-row">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-            <div>
-              <div class="muted" style="font-weight:900">Quiz (optional)</div>
-              <div class="muted">If added, quiz appears after the last page.</div>
-            </div>
-            <button id="itAddQuestionBtn" type="button" class="btn ghost">+ Add Question</button>
+          <div class="form-row">
+            <label class="label">Pages (optional JSON)</label>
+            <textarea id="itPages" class="textarea" placeholder='[{"type":"rich","html":"..."},{"type":"media","kind":"image","url":"https://...","caption":"..."}]'></textarea>
+            <div class="muted">If provided, the module will use pages instead of the single content field.</div>
           </div>
-          <div id="itQuizList" class="progress-list" style="margin-top:10px"></div>
+
+          <div class="form-row">
+            <label class="label">Quiz (optional JSON)</label>
+            <textarea id="itQuiz" class="textarea" placeholder='{"title":"Quiz","questions":[{"prompt":"...","answers":[{"text":"A","isCorrect":true},{"text":"B","isCorrect":false}]}]}'></textarea>
+            <div class="muted">Quizzes require 100% pass rate (existing behavior).</div>
+          </div>
+
+          <div id="itErr" class="error"></div>
+          <div id="itOk" class="ok"></div>
         </div>
-
-        <div class="form-row two">
-          <button id="itCreateBtn" type="button" class="btn primary wide">Create Module</button>
-          <button id="itClearBtn" type="button" class="btn ghost wide">Clear</button>
-        </div>
-
-        <div id="itOk" class="ok"></div>
-        <div id="itErr" class="error"></div>
-      </div>
-
-      <div class="card">
-        <h2>Existing Custom Modules</h2>
-        <p class="muted">These are modules created via IT Tools. (Built-in modules are separate.)</p>
-        <div id="itExisting" class="progress-list"></div>
       </div>
     </div>
-<style>
-  .rt-ribbon{border:1px solid rgba(2,132,199,.18);background:rgba(255,255,255,.92);border-radius:14px;overflow:hidden;margin:10px 0}
-  .rt-tabs{display:flex;gap:8px;padding:8px 12px;border-bottom:1px solid rgba(2,132,199,.14);background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(240,249,255,.9))}
-  .rt-tab{font-size:13px;font-weight:800;color:#0f172a;opacity:.7}
-  .rt-tab.active{opacity:1}
-  .rt-groups{display:flex;flex-wrap:wrap;gap:14px;padding:10px 12px}
-  .rt-group{display:flex;flex-direction:column;gap:6px;min-width:160px}
-  .rt-buttons{display:flex;flex-wrap:wrap;gap:8px}
-  .rt-btn{border:1px solid rgba(15,23,42,.12);background:#fff;border-radius:10px;padding:8px 10px;font-weight:800;cursor:pointer}
-  .rt-btn:hover{background:rgba(3,105,161,.06)}
-  .rt-label{font-size:12px;opacity:.75}
-  .rt-editor{min-height:220px;border:1px solid rgba(15,23,42,.12);border-radius:14px;padding:14px;background:#fff}
-  .rt-page{box-shadow:0 10px 30px rgba(2,132,199,.10)}
-  .it-mini{font-size:12px;opacity:0.8}
-  .it-row{display:flex;gap:10px;align-items:center;justify-content:space-between}
-  .it-row .left{display:flex;gap:10px;align-items:center}
-  .it-row .right{display:flex;gap:10px;align-items:center}
-  .it-chip{font-size:12px;padding:4px 8px;border-radius:999px;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.7)}
-  .it-card{padding:12px;border-radius:14px;border:1px solid rgba(2,132,199,0.14);background:rgba(255,255,255,0.75)}
-  .it-card h4{margin:0 0 6px 0}
-  .it-inline{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .it-inline .input{flex:1;min-width:220px}
-  .it-mediaHint{font-size:12px;opacity:0.85;margin-top:6px}
-</style>
   `;
 
   const els = {
-    title: document.getElementById('itModTitle'),
-    desc: document.getElementById('itModDesc'),
-    roleInstructor: document.getElementById('itRoleInstructor'),
-    roleCS: document.getElementById('itRoleCS'),
-    roleAdmin: document.getElementById('itRoleAdmin'),
-    roleIT: document.getElementById('itRoleIT'),
+    search: document.getElementById('itSearch'),
+    list: document.getElementById('itModuleList'),
+    meta: document.getElementById('itMeta'),
+    newBtn: document.getElementById('itNewBtn'),
+    saveBtn: document.getElementById('itSaveBtn'),
+    delBtn: document.getElementById('itDeleteBtn'),
+    title: document.getElementById('itTitle'),
+    desc: document.getElementById('itDesc'),
+    content: document.getElementById('itContent'),
+    pages: document.getElementById('itPages'),
+    quiz: document.getElementById('itQuiz'),
     font: document.getElementById('itFont'),
     fontSize: document.getElementById('itFontSize'),
     textColor: document.getElementById('itTextColor'),
     accentColor: document.getElementById('itAccentColor'),
-    addPageBtn: document.getElementById('itAddPageBtn'),
-    pagesList: document.getElementById('itPagesList'),
-    addQBtn: document.getElementById('itAddQuestionBtn'),
-    quizList: document.getElementById('itQuizList'),
-    createBtn: document.getElementById('itCreateBtn'),
-    clearBtn: document.getElementById('itClearBtn'),
-    ok: document.getElementById('itOk'),
+    rAdmin: document.getElementById('itRoleAdmin'),
+    rIns: document.getElementById('itRoleInstructor'),
+    rCs: document.getElementById('itRoleCS'),
+    rIt: document.getElementById('itRoleIT'),
     err: document.getElementById('itErr'),
-    existing: document.getElementById('itExisting')
+    ok: document.getElementById('itOk'),
   };
 
-  const state = {
-    pages: [],
-    quiz: []
-  };
+  let all = [];
+  let selectedId = null;
+  let selectedBuiltIn = false;
+  let selectedOverridden = false;
+  let selectedCustom = false;
 
-  const renderPages = () => {
-    els.pagesList.innerHTML = state.pages.map((p, idx) => `
-      <div class="it-card">
-        <div class="it-row">
-          <div class="left">
-            <span class="it-chip">Page ${idx+1}</span>
-            <strong>${escapeHtml(p.title || 'Untitled')}</strong>
-            <span class="it-mini">${escapeHtml(p.type)}</span>
-          </div>
-          <div class="right">
-            <button class="btn ghost" data-act="editPage" data-id="${p.id}">Edit</button>
-            <button class="btn danger" data-act="delPage" data-id="${p.id}">Delete</button>
-          </div>
-        </div>
-        ${p.type === 'media' ? `<div class="it-mediaHint">Media: ${escapeHtml(p.mediaType || '')} • ${escapeHtml(p.url || '')}</div>` : ``}
-      </div>
-    `).join('') || `<div class="muted">No pages yet. Click “Add Page”.</div>`;
-  };
+  function clearMsg(){ els.err.textContent=''; els.ok.textContent=''; }
+  function setMsg(ok, msg){
+    if (ok){ els.ok.textContent = msg; els.err.textContent=''; }
+    else { els.err.textContent = msg; els.ok.textContent=''; }
+  }
 
-  const renderQuiz = () => {
-    els.quizList.innerHTML = state.quiz.map((q, qi) => `
-      <div class="it-card">
-        <div class="it-row">
-          <div class="left">
-            <span class="it-chip">Q${qi+1}</span>
-            <strong>${escapeHtml(q.prompt || 'Untitled question')}</strong>
-          </div>
-          <div class="right">
-            <button class="btn ghost" data-act="editQ" data-id="${q.id}">Edit</button>
-            <button class="btn danger" data-act="delQ" data-id="${q.id}">Delete</button>
-          </div>
-        </div>
-        <div class="muted">${(q.answers||[]).length} answers • correct: ${(q.correctIndex??0)+1}</div>
-      </div>
-    `).join('') || `<div class="muted">No quiz questions. (Optional)</div>`;
-  };
+  function gatherRoles(){
+    const roles=[];
+    if (els.rAdmin.checked) roles.push('admin');
+    if (els.rIns.checked) roles.push('instructor');
+    if (els.rCs.checked) roles.push('cs');
+    if (els.rIt.checked) roles.push('it');
+    return roles;
+  }
 
-  const modal = (title, innerHtml, onSave) => {
-    const overlay = document.createElement('div');
-    overlay.style.position='fixed';
-    overlay.style.inset='0';
-    overlay.style.background='rgba(0,0,0,0.35)';
-    overlay.style.display='flex';
-    overlay.style.alignItems='center';
-    overlay.style.justifyContent='center';
-    overlay.style.padding='20px';
-    overlay.style.zIndex='9999';
+  function applyRoles(roles=[]){
+    els.rAdmin.checked = roles.includes('admin');
+    els.rIns.checked = roles.includes('instructor');
+    els.rCs.checked = roles.includes('cs');
+    els.rIt.checked = roles.includes('it');
+  }
 
-    const box = document.createElement('div');
-    box.className='card';
-    box.style.maxWidth='900px';
-    box.style.width='100%';
-    box.style.maxHeight='85vh';
-    box.style.overflow='auto';
-    box.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <h2 style="margin:0">${escapeHtml(title)}</h2>
-        <button class="btn ghost" id="itModalClose">Close</button>
-      </div>
-      <div style="margin-top:12px">${innerHtml}</div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
-        <button class="btn ghost" id="itModalCancel">Cancel</button>
-        <button class="btn primary" id="itModalSave">Save</button>
-      </div>
-      <div class="error" id="itModalErr"></div>
-    `;
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
+  function fillEditor(m){
+    selectedId = m?.id || null;
+    selectedBuiltIn = !!m?.builtIn;
+    selectedOverridden = !!m?.overridden;
+    selectedCustom = !!m?.custom;
 
-    const close = () => overlay.remove();
-    box.querySelector('#itModalClose').addEventListener('click', close);
-    box.querySelector('#itModalCancel').addEventListener('click', close);
-    box.querySelector('#itModalSave').addEventListener('click', async () => {
-      const errEl = box.querySelector('#itModalErr');
-      errEl.textContent='';
-      try {
-        await onSave({ box, close, errEl });
-      } catch (e) {
-        errEl.textContent = e.message || 'Failed';
-      }
-    });
-    return box;
-  };
+    els.title.value = m?.title || '';
+    els.desc.value = m?.desc || '';
+    els.content.value = m?.content || '';
+    els.pages.value = (m?.pages && m.pages.length) ? JSON.stringify(m.pages, null, 2) : '';
+    els.quiz.value = m?.quiz ? JSON.stringify(m.quiz, null, 2) : '';
+    els.font.value = m?.style?.fontFamily || '';
+    els.fontSize.value = m?.style?.fontSize || '';
+    els.textColor.value = m?.style?.textColor || '';
+    els.accentColor.value = m?.style?.accentColor || '';
+    applyRoles(m?.roles || []);
 
-  const addOrEditPage = (existing=null) => {
-    const id = existing?.id || uid();
-    const type = existing?.type || 'richtext';
-    const pageTitle = existing?.title || '';
-    const html = existing?.html || '';
-    const mediaType = existing?.mediaType || 'image';
-    const url = existing?.url || '';
-    const caption = existing?.caption || '';
+    els.meta.textContent = selectedId
+      ? `${selectedBuiltIn ? 'Built-in' : 'Custom'} • id: ${selectedId}${selectedOverridden ? ' • overridden' : ''}`
+      : 'New module';
 
-    const box = modal(existing ? 'Edit Page' : 'Add Page', `
-      <div class="form-row two">
-        <div>
-          <label class="label">Page title</label>
-          <input id="pTitle" class="input" value="${escapeHtml(pageTitle)}" placeholder="e.g., Safe Supervision">
-        </div>
-        <div>
-          <label class="label">Page type</label>
-          <select id="pType" class="input">
-            <option value="richtext" ${type==='richtext'?'selected':''}>Rich text</option>
-            <option value="media" ${type==='media'?'selected':''}>Media (image/video)</option>
-          </select>
-        </div>
-      </div>
+    // Delete button meaning:
+    // - custom: delete
+    // - built-in overridden: revert
+    // - built-in not overridden: disabled
+    if (!selectedId){
+      els.delBtn.disabled = true;
+      els.delBtn.textContent = 'Delete';
+    }else if (!selectedBuiltIn){
+      els.delBtn.disabled = false;
+      els.delBtn.textContent = 'Delete';
+    }else if (selectedOverridden){
+      els.delBtn.disabled = false;
+      els.delBtn.textContent = 'Revert';
+    }else{
+      els.delBtn.disabled = true;
+      els.delBtn.textContent = 'Revert';
+    }
+  }
 
-      <div id="pRichWrap" class="form-row" style="${type==='richtext'?'':'display:none'}">
-        <div class="muted" style="font-weight:800;margin-bottom:6px">Editor</div>
-        <div class="rt-ribbon">
-          <div class="rt-tabs">
-            <span class="rt-tab active">Home</span>
-            <span class="rt-tab">Insert</span>
-          </div>
-          <div class="rt-groups">
-            <div class="rt-group">
-              <div class="rt-buttons">
-                <button type="button" class="rt-btn" data-cmd="bold" title="Bold"><b>B</b></button>
-                <button type="button" class="rt-btn" data-cmd="italic" title="Italic"><i>I</i></button>
-                <button type="button" class="rt-btn" data-cmd="underline" title="Underline"><u>U</u></button>
-              </div>
-              <div class="rt-label">Font style</div>
-            </div>
-            <div class="rt-group">
-              <div class="rt-buttons">
-                <button type="button" class="rt-btn" data-cmd="insertUnorderedList" title="Bullets">• List</button>
-                <button type="button" class="rt-btn" data-cmd="insertOrderedList" title="Numbered">1. List</button>
-              </div>
-              <div class="rt-label">Paragraph</div>
-            </div>
-            <div class="rt-group">
-              <div class="rt-buttons">
-                <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="p" title="Normal">Normal</button>
-                <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="h2" title="Heading 2">H2</button>
-                <button type="button" class="rt-btn" data-cmd="formatBlock" data-val="h3" title="Heading 3">H3</button>
-              </div>
-              <div class="rt-label">Styles</div>
-            </div>
-            <div class="rt-group">
-              <div class="rt-buttons">
-                <button type="button" class="rt-btn" data-cmd="createLink" title="Insert link">Link</button>
-                <button type="button" class="rt-btn" data-cmd="insertImage" title="Insert image by URL">Image</button>
-                <button type="button" class="rt-btn" data-cmd="removeFormat" title="Clear formatting">Clear</button>
-              </div>
-              <div class="rt-label">Insert</div>
-            </div>
-          </div>
-        </div>
-        <div id="pEditor" class="rt-editor" contenteditable="true"></div>
-        <div class="it-mini">Tip: You can paste text, add headings, lists, and images via URL.</div>
-      </div>
+  function renderList(){
+    const q = (els.search.value || '').trim().toLowerCase();
+    const items = q ? all.filter(m => (m.title||'').toLowerCase().includes(q) || (m.id||'').toLowerCase().includes(q)) : all;
 
-      <div id="pMediaWrap" class="form-row" style="${type==='media'?'':'display:none'}">
-        <div class="form-row two">
-          <div>
-            <label class="label">Media type</label>
-            <select id="pMediaType" class="input">
-              <option value="image" ${mediaType==='image'?'selected':''}>Image (URL)</option>
-              <option value="video" ${mediaType==='video'?'selected':''}>Video (YouTube/Vimeo/embed URL)</option>
-            </select>
-          </div>
-          <div>
-            <label class="label">URL</label>
-            <input id="pUrl" class="input" value="${escapeHtml(url)}" placeholder="https://...">
-          </div>
-        </div>
-        <div class="form-row">
-          <label class="label">Caption (optional)</label>
-          <input id="pCaption" class="input" value="${escapeHtml(caption)}" placeholder="Shown under the media">
-        </div>
-        <div class="it-mini">Images and videos must be hosted somewhere accessible via URL.</div>
-      </div>
-    `, async ({ box, close, errEl }) => {
-      const t = box.querySelector('#pTitle').value.trim();
-      const ty = box.querySelector('#pType').value;
-      if (!t) throw new Error('Page title is required.');
-      let page = { id, type: ty, title: t };
+    els.list.innerHTML = items.map(m => {
+      const tags = [
+        m.builtIn ? 'Built-in' : 'Custom',
+        (m.overridden ? 'Replaced' : null),
+      ].filter(Boolean).join(' • ');
+      const roles = (m.roles||[]).map(_roleLabel).join(', ');
+      return `
+        <button type="button" class="it-item ${m.id===selectedId ? 'active' : ''}" data-id="${_escape(m.id)}">
+          <div class="it-item-title">${_escape(m.title)}</div>
+          <div class="it-item-sub muted">${_escape(tags)}${roles ? ' • ' + _escape(roles) : ''}</div>
+        </button>
+      `;
+    }).join('');
 
-      if (ty === 'richtext') {
-        const ed = box.querySelector('#pEditor');
-        const htmlOut = (ed.innerHTML || '').trim();
-        if (!htmlOut) throw new Error('Page content is required.');
-        page.html = htmlOut;
-      } else {
-        const mt = box.querySelector('#pMediaType').value;
-        const u = box.querySelector('#pUrl').value.trim();
-        if (!u) throw new Error('Media URL is required.');
-        page.mediaType = mt;
-        page.url = u;
-        page.caption = box.querySelector('#pCaption').value.trim();
-      }
-
-      const i = state.pages.findIndex(x => x.id === id);
-      if (i >= 0) state.pages[i] = page;
-      else state.pages.push(page);
-      renderPages();
-      close();
-    });
-
-    // Wire editor
-    const pTypeSel = box.querySelector('#pType');
-    const richWrap = box.querySelector('#pRichWrap');
-    const mediaWrap = box.querySelector('#pMediaWrap');
-    const editor = box.querySelector('#pEditor');
-    if (editor) editor.innerHTML = html || '';
-
-    pTypeSel.addEventListener('change', () => {
-      const v = pTypeSel.value;
-      richWrap.style.display = v === 'richtext' ? '' : 'none';
-      mediaWrap.style.display = v === 'media' ? '' : 'none';
-    });
-
-    box.querySelectorAll('[data-cmd]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const c = btn.getAttribute('data-cmd');
-        const val = btn.getAttribute('data-val');
-        if (c === 'createLink') {
-          const url = prompt('Link URL:');
-          if (url) cmd('createLink', url);
-          return;
-        }
-        if (c === 'insertImage') {
-          const url = prompt('Image URL:');
-          if (url) cmd('insertImage', url);
-          return;
-        }
-        if (c === 'formatBlock') {
-          cmd('formatBlock', val);
-          return;
-        }
-        cmd(c);
+    els.list.querySelectorAll('[data-id]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const id = btn.getAttribute('data-id');
+        const m = all.find(x=>x.id===id);
+        if (m) fillEditor(m);
       });
     });
-  };
+  }
 
-  const addOrEditQuestion = (existing=null) => {
-    const id = existing?.id || uid();
-    const promptTxt = existing?.prompt || '';
-    const answers = existing?.answers || ['', '', '', ''];
-    const correctIndex = existing?.correctIndex ?? 0;
-
-    const box = modal(existing ? 'Edit Question' : 'Add Question', `
-      <div class="form-row">
-        <label class="label">Question</label>
-        <input id="qPrompt" class="input" value="${escapeHtml(promptTxt)}" placeholder="e.g., How often do we test pool water?">
-      </div>
-      <div class="form-row">
-        <div class="muted" style="font-weight:800;margin-bottom:6px">Answers (pick the correct one)</div>
-        <div class="progress-list" style="margin-top:0">
-          ${answers.map((a, i) => `
-            <div class="it-card">
-              <div class="it-inline">
-                <input type="radio" name="qCorrect" value="${i}" ${i===correctIndex?'checked':''}>
-                <input id="qA${i}" class="input" value="${escapeHtml(a)}" placeholder="Answer ${i+1}">
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `, async ({ box, close }) => {
-      const p = box.querySelector('#qPrompt').value.trim();
-      if (!p) throw new Error('Question text is required.');
-      const ans = [0,1,2,3].map(i => box.querySelector(`#qA${i}`).value.trim());
-      if (ans.some(a => !a)) throw new Error('All 4 answers are required.');
-      const ci = Number(box.querySelector('input[name="qCorrect"]:checked')?.value ?? 0);
-      const q = { id, prompt: p, answers: ans, correctIndex: ci };
-
-      const i = state.quiz.findIndex(x => x.id === id);
-      if (i >= 0) state.quiz[i] = q;
-      else state.quiz.push(q);
-      renderQuiz();
-      close();
+  async function loadAll(){
+    clearMsg();
+    const out = await API.get('/api/it/modules');
+    all = Array.isArray(out) ? out : (out.modules || []);
+    // sort: IT first, then built-in, then title
+    all.sort((a,b)=>{
+      const w=(x)=> (x.custom?0:1) + (x.overridden?2:0);
+      return (w(b)-w(a)) || (a.title||'').localeCompare(b.title||'');
     });
-  };
+    renderList();
+  }
 
-  els.addPageBtn.addEventListener('click', (e) => { e.preventDefault(); try { addOrEditPage(); } catch(err){ els.err.textContent = err?.message || String(err); } });
-  els.pagesList.addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-act]');
-    if (!btn) return;
-    const act = btn.getAttribute('data-act');
-    const id = btn.getAttribute('data-id');
-    const page = state.pages.find(p => p.id === id);
-    if (!page) return;
-    if (act === 'editPage') return addOrEditPage(page);
-    if (act === 'delPage') {
-      if (!confirm('Delete this page?')) return;
-      state.pages = state.pages.filter(p => p.id !== id);
-      renderPages();
+  function buildPayload(){
+    clearMsg();
+    const title = els.title.value.trim();
+    if (!title) throw new Error('Title is required');
+    const roles = gatherRoles();
+    if (!roles.length) throw new Error('Select at least one role');
+
+    let pages = [];
+    const pagesTxt = (els.pages.value || '').trim();
+    if (pagesTxt){
+      pages = JSON.parse(pagesTxt);
+      if (!Array.isArray(pages)) throw new Error('Pages must be a JSON array');
     }
+
+    let quiz = null;
+    const quizTxt = (els.quiz.value || '').trim();
+    if (quizTxt){
+      quiz = JSON.parse(quizTxt);
+    }
+
+    const style = {
+      fontFamily: (els.font.value || '').trim() || null,
+      fontSize: (els.fontSize.value || '').trim() || null,
+      textColor: (els.textColor.value || '').trim() || null,
+      accentColor: (els.accentColor.value || '').trim() || null,
+    };
+
+    // clean nulls
+    Object.keys(style).forEach(k=>{ if (!style[k]) delete style[k]; });
+    return {
+      id: selectedId || undefined,
+      title,
+      desc: els.desc.value.trim(),
+      roles,
+      content: els.content.value,
+      pages,
+      quiz,
+      style: Object.keys(style).length ? style : null
+    };
+  }
+
+  els.newBtn.addEventListener('click', (e)=>{
+    e.preventDefault();
+    fillEditor({ id:'', title:'', desc:'', roles:['instructor'], custom:true, builtIn:false, overridden:false, content:'', pages:[], quiz:null, style:null });
+    selectedId = null;
+    els.meta.textContent = 'New module';
+    els.delBtn.disabled = true;
+    els.delBtn.textContent = 'Delete';
   });
 
-  els.addQBtn.addEventListener('click', (e) => { e.preventDefault(); try { addOrEditQuestion(); } catch(err){ els.err.textContent = err?.message || String(err); } });
-  els.quizList.addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-act]');
-    if (!btn) return;
-    const act = btn.getAttribute('data-act');
-    const id = btn.getAttribute('data-id');
-    const q = state.quiz.find(x => x.id === id);
-    if (!q) return;
-    if (act === 'editQ') return addOrEditQuestion(q);
-    if (act === 'delQ') {
-      if (!confirm('Delete this question?')) return;
-      state.quiz = state.quiz.filter(x => x.id !== id);
-      renderQuiz();
-    }
-  });
-
-  const clearAll = () => {
-    els.title.value = '';
-    els.desc.value = '';
-    els.roleInstructor.checked = false;
-    els.roleCS.checked = false;
-    els.roleAdmin.checked = false;
-    els.roleIT.checked = false;
-    els.font.value = "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
-    els.fontSize.value = "16";
-    els.textColor.value = "#0f172a";
-    els.accentColor.value = "#06b6d4";
-    state.pages = [];
-    state.quiz = [];
-    renderPages();
-    renderQuiz();
-  };
-
-  els.clearBtn.addEventListener('click', () => {
-    if (!confirm('Clear the builder?')) return;
-    clearAll();
-    els.ok.textContent = '';
-    els.err.textContent = '';
-  });
-
-  const refreshExisting = async () => {
-    try {
-      const out = await API.get('/api/it/modules');
-      const mods = Array.isArray(out) ? out : (out.modules || out.items || []);
-      els.existing.innerHTML = (mods).map(m => `
-        <div class="progress-item">
-          <div>
-            <div style="font-weight:900">${escapeHtml(m.title)}</div>
-            <div class="muted">${escapeHtml(m.desc || '')}</div>
-            <div class="muted">Roles: ${(m.roles||[]).map(roleLabel).join(', ')}</div>
-          </div>
-          <div class="pill pending">CUSTOM</div>
-        </div>
-      `).join('') || `<div class="muted">No custom modules yet.</div>`;
-    } catch (e) {
-      els.existing.innerHTML = `<div class="error">${escapeHtml(e.message||'Failed to load')}</div>`;
-    }
-  };
-
-  els.createBtn.addEventListener('click', async () => {
-    els.ok.textContent='';
-    els.err.textContent='';
-    els.createBtn.disabled = true;
-    try {
-      const title = els.title.value.trim();
-      if (!title) throw new Error('Title is required.');
-      if (state.pages.length === 0) throw new Error('Add at least one page.');
-
-      const roles = [];
-      if (els.roleInstructor.checked) roles.push('instructor');
-      if (els.roleCS.checked) roles.push('cs');
-      if (els.roleAdmin.checked) roles.push('admin');
-      if (els.roleIT.checked) roles.push('it');
-      if (roles.length === 0) throw new Error('Select at least one role.');
-
-      const style = {
-        fontFamily: els.font.value,
-        baseFontPx: Number(els.fontSize.value || 16),
-        textColor: els.textColor.value,
-        accentColor: els.accentColor.value
-      };
-
-      // Convert quiz to API format (answers with ids + correct answer id)
-      let quiz = null;
-      if (state.quiz.length > 0) {
-        quiz = {
-          title: `${title} Quiz`,
-          questions: state.quiz.map((q) => ({
-            prompt: q.prompt,
-            answers: q.answers.map((t, i) => ({ id: `a${i+1}`, text: t })),
-            correctAnswerId: `a${q.correctIndex+1}`
-          }))
-        };
+  els.saveBtn.addEventListener('click', async (e)=>{
+    e.preventDefault();
+    clearMsg();
+    els.saveBtn.disabled = true;
+    try{
+      const payload = buildPayload();
+      if (!selectedId){
+        // create custom
+        const out = await API.post('/api/it/modules', payload);
+        setMsg(true, 'Module created.');
+        await loadAll();
+        // select created by id if returned
+        if (out?.id){
+          const m = all.find(x=>x.id===out.id);
+          if (m) fillEditor(m);
+        }
+      }else{
+        payload.id = selectedId;
+        await API.put('/api/it/modules', payload);
+        setMsg(true, selectedBuiltIn ? 'Built-in module replaced (override saved).' : 'Module updated.');
+        await loadAll();
+        const m = all.find(x=>x.id===selectedId);
+        if (m) fillEditor(m);
       }
-
-      await API.post('/api/it/modules', {
-        title,
-        desc: els.desc.value.trim(),
-        roles,
-        style,
-        pages: state.pages,
-        quiz
-      });
-
-      els.ok.textContent = 'Module created.';
-      await refreshExisting();
-      clearAll();
-      await refreshExisting();
-    } catch (e) {
-      els.err.textContent = e.message || 'Failed';
-    } finally {
-      els.createBtn.disabled = false;
+    }catch(err){
+      setMsg(false, err?.message || 'Save failed');
+    }finally{
+      els.saveBtn.disabled = false;
     }
   });
 
-  renderPages();
-  renderQuiz();
-  await refreshExisting();
+  els.delBtn.addEventListener('click', async (e)=>{
+    e.preventDefault();
+    clearMsg();
+    if (!selectedId) return;
+    const action = (!selectedBuiltIn) ? 'delete this module' : 'revert this module to the original built-in version';
+    if (!confirm(`Are you sure you want to ${action}?`)) return;
+
+    els.delBtn.disabled = true;
+    try{
+      await API.del(`/api/it/modules?id=${encodeURIComponent(selectedId)}`);
+      setMsg(true, selectedBuiltIn ? 'Reverted to original.' : 'Deleted.');
+      selectedId = null;
+      await loadAll();
+      fillEditor({ id:'', title:'', desc:'', roles:['instructor'], custom:true, builtIn:false, overridden:false, content:'', pages:[], quiz:null, style:null });
+      selectedId = null;
+    }catch(err){
+      setMsg(false, err?.message || 'Delete failed');
+    }finally{
+      els.delBtn.disabled = false;
+    }
+  });
+
+  els.search.addEventListener('input', renderList);
+
+  // initial
+  fillEditor({ id:'', title:'', desc:'', roles:['instructor'], custom:true, builtIn:false, overridden:false, content:'', pages:[], quiz:null, style:null });
+  selectedId = null;
+  loadAll().catch(e=>setMsg(false, e.message || 'Failed to load modules'));
 }
+
 
 function slugify(s){
   return (s||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'').slice(0,50);
@@ -1527,8 +1110,7 @@ async function itToolsWire(mount){
   `;
 
   async function refresh(){
-    const out = await API.get('/api/it/modules');
-    const mods = (out && out.modules) ? out.modules : [];
+    const mods = await API.get('/api/it/modules');
     const list = mods.map(m => {
       const roles = (m.roles||[]).join(', ');
       const kind = m.custom ? 'CUSTOM' : 'BUILT-IN';
