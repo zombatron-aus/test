@@ -239,6 +239,33 @@ export async function deleteOverrideModule(env, id){
   return { ok:true };
 }
 
+
+function mergeModule(base, override){
+  if (!override || typeof override !== 'object') return base;
+  const out = { ...base };
+
+  for (const [k,v] of Object.entries(override)){
+    if (v === undefined || v === null) continue;
+
+    // arrays: only replace if non-empty
+    if (Array.isArray(v)){
+      if (v.length > 0) out[k] = v;
+      continue;
+    }
+
+    // strings: only replace if non-empty (trim)
+    if (typeof v === 'string'){
+      if (v.trim().length > 0) out[k] = v;
+      continue;
+    }
+
+    // objects: shallow replace (for style/settings etc)
+    out[k] = v;
+  }
+
+  return out;
+}
+
 export async function getAllModules(env){
   const overrides = await getOverrides(env);
   const custom = await getCustomModules(env);
@@ -249,7 +276,7 @@ export async function getAllModules(env){
     const o = overrides[m.id];
     if (!o) return {...m, builtIn:true, overridden:false};
     // override replaces built-in (but keep id stable)
-    return {...m, ...o, id: m.id, builtIn:true, overridden:true};
+    return mergeModule({ ...m, builtIn:true, overridden:true }, { ...o, id: m.id });
   });
 
   // avoid id collisions with core modules
