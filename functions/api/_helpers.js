@@ -239,7 +239,7 @@ export async function deleteOverrideModule(env, id){
   return { ok:true };
 }
 
-async function getAllModules(env){
+export async function getAllModules(env){
   const overrides = await getOverrides(env);
   const custom = await getCustomModules(env);
   const safeCustom = custom.map(m => ({...m, custom:true, type: m.type || 'content'}));
