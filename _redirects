@@ -1,2 +1,3 @@
-# Block backend source files
-/functions/*   /404.html   200
+/dashboard /dashboard.html 200
+/module /module.html 200
+/quiz /quiz.html 200
