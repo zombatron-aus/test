@@ -1368,7 +1368,8 @@ async function itToolsInitInline(){
   const refreshExisting = async () => {
     try {
       const out = await API.get('/api/it/modules');
-      els.existing.innerHTML = (out.modules || []).map(m => `
+      const mods = Array.isArray(out) ? out : (out.modules || out.items || []);
+      els.existing.innerHTML = (mods).map(m => `
         <div class="progress-item">
           <div>
             <div style="font-weight:900">${escapeHtml(m.title)}</div>
