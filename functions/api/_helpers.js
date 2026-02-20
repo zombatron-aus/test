@@ -231,6 +231,11 @@ export async function getProgress(env, userId){
   const raw = await env.BW_LMS.get(`progress:${userId}`);
   return raw ? JSON.parse(raw) : {};
 }
+// Backwards-compatible alias (some routes import loadProgress)
+export async function loadProgress(env, userId){
+  return getProgress(env, userId);
+}
+
 export async function saveProgress(env, userId, prog){
   await env.BW_LMS.put(`progress:${userId}`, JSON.stringify(prog));
 }
