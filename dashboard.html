@@ -1,41 +1,109 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bright Waves — Dashboard</title>
-  <link rel="stylesheet" href="/assets/styles.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+  
 </head>
 <body>
-
   <div class="topbar">
-    <div class="topbar-inner">
-      <a class="brand" href="/dashboard.html" aria-label="Bright Waves Home">
+    <div class="brand">
+      <a href="/dashboard" class="brand" style="color:inherit">
         <div class="logo"></div>
         <div>
           <h1>Bright Waves</h1>
-          <p>Staff Training & Manual Portal</p>
+          <div class="sub">Training Dashboard</div>
         </div>
       </a>
-      <div class="spacer"></div>
-      <div class="pill">
-        <div class="who" id="who"></div>
-        <button class="btn secondary" id="logoutBtn" type="button">Logout</button>
+    </div>
+    <div class="pill">
+      <div class="small" id="who"></div>
+      <button class="btn secondary" onclick="logout()">Logout</button>
+    </div>
+  </div>
+  <div class="container">
+    <div class="grid two">
+      <div class="card">
+        <h2>Your progress</h2>
+        <div class="muted" id="progText">Loading…</div>
+        <div style="height:10px"></div>
+        <div class="progressbar"><div id="progBar"></div></div>
+        <div class="hr"></div>
+        <div class="muted">Modules available to you:</div>
+        <div style="height:10px"></div>
+        <div class="list" id="moduleList"></div>
+        <div id="emptyModules" class="notice" style="display:none;margin-top:12px">
+          <b>No modules exist yet.</b>
+          <div class="small">An IT user must create modules in IT Tools.</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Manager tools</h2>
+        <div class="muted">Admin can manage users and progress. IT can create and manage modules.</div>
+        <div class="hr"></div>
+        <div class="list">
+          <div class="item" id="adminLink" style="display:none">
+            <div><b>Admin Panel</b><div class="small">Manage users, roles, and progress</div></div>
+            <a class="btn" href="/admin">Open</a>
+          </div>
+          <div class="item" id="itLink" style="display:none">
+            <div><b>IT Tools</b><div class="small">Create/edit modules, assign to roles</div></div>
+            <a class="btn" href="/it-tools">Open</a>
+          </div>
+          <div class="notice" id="noTools" style="display:none">
+            <b>No extra tools for your role.</b>
+            <div class="small">If you need access, ask your manager.</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
-        
+<script>
+(async ()=>{
+  const me = await requireAuth();
+  setText('who', `${me.name} • ${me.roles.map(roleLabel).join(', ')}`);
+  if(me.roles.includes('admin')) show('adminLink');
+  if(me.roles.includes('it')) show('itLink');
+  if(!me.roles.includes('admin') && !me.roles.includes('it')) show('noTools');
 
-<div class="container" id="dashboardRoot">
-  <div class="card">
-    <h2>Training</h2>
-    <p>Your assigned modules are listed below.</p>
-    <div class="progressbar" style="margin-top:12px"><div id="progressBar"></div></div>
-    <div class="kpi"><span id="progressPct">0% complete</span><span id="progressKpi">0 / 0 modules</span></div>
-    <div class="list" id="moduleList"></div>
-  </div>
-</div>
+  const data = await API.get('/api/dashboard');
+  const { modules, lockedReason, percent } = data;
+  document.getElementById('progBar').style.width = (percent||0) + '%';
+  setText('progText', `${percent||0}% complete`);
+  const list = document.getElementById('moduleList');
+  list.innerHTML = '';
+  if(!modules || modules.length===0){
+    show('emptyModules');
+    return;
+  }
+  if(lockedReason){
+    const n = document.createElement('div');
+    n.className='notice';
+    n.innerHTML = `<b>Locked:</b> ${escapeHtml(lockedReason)}`;
+    list.appendChild(n);
+  }
+  for(const m of modules){
+    const div = document.createElement('div');
+    div.className = 'item';
+    const status = m.completed ? 'Complete' : (m.locked ? 'Locked' : 'Pending');
+    const badge = m.completed ? 'badge' : (m.locked ? 'badge' : 'badge');
+    div.innerHTML = `
+      <div>
+        <b>${escapeHtml(m.title)}</b>
+        <div class="small">${escapeHtml(m.description||'')}</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span class="badge">${escapeHtml(status)}</span>
+        <a class="btn ${m.locked?'secondary':''}" href="${m.locked?'#':('/module?id='+encodeURIComponent(m.id))}">${m.locked?'Locked':'Open'}</a>
+      </div>
+    `;
+    list.appendChild(div);
+  }
+})();
+</script>
 
-<script src="/assets/app.js"></script>
+<script src="/assets/client.js"></script>
 </body>
 </html>

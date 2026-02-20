@@ -1,48 +1,110 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bright Waves — Module</title>
-  <link rel="stylesheet" href="/assets/styles.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Module</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+  
 </head>
 <body>
-
   <div class="topbar">
-    <div class="topbar-inner">
-      <a class="brand" href="/dashboard.html" aria-label="Bright Waves Home">
+    <div class="brand">
+      <a href="/dashboard" class="brand" style="color:inherit">
         <div class="logo"></div>
         <div>
           <h1>Bright Waves</h1>
-          <p>Staff Training & Manual Portal</p>
+          <div class="sub" id="sub">Module</div>
         </div>
       </a>
-      <div class="spacer"></div>
-      <div class="pill">
-        <div class="who" id="who"></div>
-        <button class="btn secondary" id="logoutBtn" type="button">Logout</button>
+    </div>
+    <div class="pill">
+      <div class="small" id="who"></div>
+      <button class="btn secondary" onclick="logout()">Logout</button>
+    </div>
+  </div>
+  <div class="container" style="max-width:920px">
+    <div class="card" id="card">
+      <h2 id="title">Loading…</h2>
+      <div class="muted" id="desc"></div>
+      <div class="hr"></div>
+      <div id="pageWrap"></div>
+      <div class="hr"></div>
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <button class="btn ghost" id="backBtn">Back</button>
+        <div style="display:flex;gap:10px">
+          <button class="btn secondary" id="prevBtn">Previous</button>
+          <button class="btn" id="nextBtn">Next</button>
+        </div>
       </div>
+      <div id="msg" class="small" style="margin-top:10px;color:#b91c1c"></div>
     </div>
   </div>
-        
+<script>
+(async ()=>{
+  const me = await requireAuth();
+  setText('who', `${me.name} • ${me.roles.map(roleLabel).join(', ')}`);
+  const id = qs('id');
+  if(!id){ location.href='/dashboard'; return; }
+  const view = await API.get('/api/view?id='+encodeURIComponent(id));
+  if(view.redirectToQuiz){
+    location.href = '/quiz?id='+encodeURIComponent(id);
+    return;
+  }
+  const m = view.module;
+  setText('title', m.title);
+  setText('desc', m.description||'');
+  setText('sub', m.title);
+  let idx = view.pageIndex || 0;
+  const wrap = document.getElementById('pageWrap');
+  function applyStyling(){
+    const s = m.styling||{};
+    const card = document.getElementById('card');
+    card.style.fontFamily = s.font || '';
+    card.style.fontSize = (s.baseSize||14)+'px';
+    card.style.color = s.textColor || '';
+    document.documentElement.style.setProperty('--accent', s.accentColor || '#0b76b7');
+  }
+  applyStyling();
+  function render(){
+    const page = (m.pages||[])[idx];
+    if(!page){ wrap.innerHTML = '<div class="notice">This module has no pages.</div>'; return; }
+    wrap.innerHTML = page.html || '';
+    document.getElementById('prevBtn').disabled = idx<=0;
+    document.getElementById('nextBtn').textContent = (idx >= (m.pages.length-1)) ? (m.quiz && m.quiz.questions?.length ? 'Go to Quiz' : 'Finish') : 'Next';
+  }
+  async function markPageDone(){
+    await API.post('/api/progress/page',{moduleId:id, pageIndex: idx});
+  }
+  document.getElementById('backBtn').onclick = ()=> location.href='/dashboard';
+  document.getElementById('prevBtn').onclick = async ()=>{ idx=Math.max(0,idx-1); render(); };
+  document.getElementById('nextBtn').onclick = async ()=>{
+    setText('msg','');
+    try{
+      await markPageDone();
+      if(idx < (m.pages.length-1)){
+        idx++;
+        render();
+        return;
+      }
+      // last page
+      if(m.quiz && m.quiz.questions && m.quiz.questions.length){
+        // guard: eligibility must be satisfied server-side
+        const elig = await API.get('/api/quiz-eligibility?id='+encodeURIComponent(id));
+        if(elig.ok){ location.href='/quiz?id='+encodeURIComponent(id); return; }
+        setText('msg', elig.reason || 'Quiz not available yet.');
+        return;
+      }
+      await API.post('/api/progress/complete',{moduleId:id});
+      location.href='/dashboard';
+    }catch(e){
+      setText('msg', e.message || String(e));
+    }
+  };
+  render();
+})();
+</script>
 
-<div class="container" id="moduleWrap">
-  <div class="card" id="moduleCard">
-    <h2 id="modTitle">Module</h2>
-    <p id="modDesc"></p>
-    <hr class="sep">
-    <h2 id="pageTitle" style="font-size:16px;margin:0 0 10px 0"></h2>
-    <div id="pageBody"></div>
-    <hr class="sep">
-    <div class="row">
-      <button class="btn secondary" id="btnPrev" type="button">Back</button>
-      <button class="btn secondary" id="btnNext" type="button">Next</button>
-      <button class="btn" id="btnDone" type="button" style="display:none">Acknowledge</button>
-      <button class="btn" id="btnQuiz" type="button" style="display:none">Start Quiz</button>
-    </div>
-  </div>
-</div>
-
-<script src="/assets/app.js"></script>
+<script src="/assets/client.js"></script>
 </body>
 </html>

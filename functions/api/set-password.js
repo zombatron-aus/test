@@ -1,16 +1,20 @@
-import { json, validatePasswordPolicy, hashPasswordPBKDF2, saveUser } from "./_helpers.js";
+import { json, requireUser, passwordPolicyOk, hashPasswordPBKDF2, saveUser, setCookieHeaders } from "./_helpers.js";
 
-export async function onRequestPost({ request, data, env }) {
-  const u = data.user;
-  const body = await request.json().catch(()=>({}));
+export async function onRequestPost({request, env}){
+  const {user, rotated} = await requireUser(env, request);
+  if(!user) return json({error:"Unauthorized"}, 401);
+
+  let body = {};
+  try{ body = await request.json(); }catch(e){}
   const password = body.password || "";
+  const pol = passwordPolicyOk(password);
+  if(!pol.ok) return json({error: pol.reason}, 400);
 
-  const err = validatePasswordPolicy(password);
-  if (err) return json({ error: err }, 400);
+  user.pw = await hashPasswordPBKDF2(password);
+  user.mustReset = false;
+  await saveUser(env, user);
 
-  u.pwd = await hashPasswordPBKDF2(password);
-  u.forceReset = false;
-  await saveUser(env, u);
-
-  return json({ ok:true });
+  const headers = {};
+  if(rotated) headers["Set-Cookie"] = setCookieHeaders("bw_session", rotated, {maxAge: 60*60*24*7});
+  return json({ok:true}, 200, headers);
 }

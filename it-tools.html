@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>IT Tools</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+  
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <a href="/dashboard" class="brand" style="color:inherit">
+        <div class="logo"></div>
+        <div>
+          <h1>Bright Waves</h1>
+          <div class="sub">IT Tools — Module Builder</div>
+        </div>
+      </a>
+    </div>
+    <div class="pill">
+      <div class="small" id="who"></div>
+      <button class="btn secondary" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="grid two">
+      <div class="card">
+        <h2>Create / edit module</h2>
+        <div class="muted">All training modules are created here. No hardcoded modules exist.</div>
+        <div class="hr"></div>
+
+        <div class="row">
+          <div>
+            <div class="small">Title</div>
+            <input id="title" class="input" placeholder="Module title" />
+          </div>
+          <div>
+            <div class="small">Description</div>
+            <input id="desc" class="input" placeholder="Short description" />
+          </div>
+        </div>
+
+        <div style="height:10px"></div>
+        <div class="row">
+          <div>
+            <div class="small">Assign to roles</div>
+            <div id="roles" class="card" style="box-shadow:none;border:1px solid var(--border);padding:12px;border-radius:16px"></div>
+            <div class="small">Tip: You can assign multiple roles.</div>
+          </div>
+          <div>
+            <div class="small">Gating</div>
+            <label class="item" style="justify-content:flex-start">
+              <input id="introReq" type="checkbox" style="margin-right:10px">
+              <span><b>Required first</b> (locks other modules until completed)</span>
+            </label>
+            <div class="small">Use this for your Introduction module.</div>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+        <h2 style="margin:0 0 8px 0">Pages</h2>
+        <div class="toolbar" aria-label="editor toolbar">
+          <button class="toolbtn" data-cmd="bold"><b>B</b></button>
+          <button class="toolbtn" data-cmd="italic"><i>I</i></button>
+          <button class="toolbtn" data-cmd="underline"><u>U</u></button>
+          <button class="toolbtn" data-cmd="insertUnorderedList">• List</button>
+          <select id="fontSel" class="input" style="width:160px">
+            <option value="">System</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="Times New Roman, serif">Times</option>
+            <option value="Arial, sans-serif">Arial</option>
+            <option value="Verdana, sans-serif">Verdana</option>
+          </select>
+          <select id="sizeSel" class="input" style="width:130px">
+            <option value="14">14px</option>
+            <option value="16" selected>16px</option>
+            <option value="18">18px</option>
+            <option value="20">20px</option>
+          </select>
+          <input id="textColor" type="color" class="input" style="width:56px;padding:8px" value="#0f172a" title="Text color" />
+          <input id="accentColor" type="color" class="input" style="width:56px;padding:8px" value="#0b76b7" title="Accent color" />
+          <button class="toolbtn" id="addPageBtn">+ Add Page</button>
+        </div>
+
+        <div id="pagesList" class="list" style="margin-top:10px"></div>
+
+        <div class="hr"></div>
+        <h2 style="margin:0 0 8px 0">Quiz (optional)</h2>
+        <div class="muted small">If added, quiz appears after the last page. Pass rate is 100%.</div>
+        <div style="height:10px"></div>
+        <button class="btn ghost" id="addQBtn">+ Add Question</button>
+        <div style="height:10px"></div>
+        <div id="quizList" class="list"></div>
+
+        <div class="hr"></div>
+        <div class="row">
+          <button class="btn" id="saveModuleBtn">Save Module</button>
+          <button class="btn secondary" id="clearBtn">Clear</button>
+        </div>
+        <div id="msg" class="small" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <h2>All modules</h2>
+        <div class="muted">Create, edit, or delete modules (including existing ones).</div>
+        <div class="hr"></div>
+        <div id="allModules" class="list"></div>
+        <div id="empty" class="notice" style="display:none">
+          <b>No modules yet.</b>
+          <div class="small">Create your first module (e.g., “Welcome / Introduction”) and tick “Required first”.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page editor modal -->
+  <div id="modal" style="display:none;position:fixed;inset:0;background:rgba(2,8,23,.55);z-index:200;align-items:center;justify-content:center;padding:16px">
+    <div class="card" style="max-width:920px;width:100%;max-height:90vh;overflow:auto">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+        <h2 style="margin:0">Edit Page</h2>
+        <button class="btn secondary" id="closeModal">Close</button>
+      </div>
+      <div class="hr"></div>
+      <div class="toolbar">
+        <button class="toolbtn" data-ecmd="bold"><b>B</b></button>
+        <button class="toolbtn" data-ecmd="italic"><i>I</i></button>
+        <button class="toolbtn" data-ecmd="underline"><u>U</u></button>
+        <button class="toolbtn" data-ecmd="insertUnorderedList">• List</button>
+        <button class="toolbtn" data-ecmd="createLink">Link</button>
+        <button class="toolbtn" id="insImg">Image</button>
+        <button class="toolbtn" id="insVid">Video (embed)</button>
+      </div>
+      <div style="height:10px"></div>
+      <div id="editor" class="editor" contenteditable="true"></div>
+      <div style="height:12px"></div>
+      <button class="btn" id="savePage">Save Page</button>
+      <div id="mmsg" class="small" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+<script>
+(async ()=>{
+  const me = await requireAuth();
+  if(!me.roles.includes('it')){ location.href='/dashboard'; return; }
+  setText('who', `${me.name} • ${me.roles.map(roleLabel).join(', ')}`);
+
+  const ROLE_KEYS = ['instructor','customer_service','admin','it'];
+  const rolesWrap = document.getElementById('roles');
+  for(const r of ROLE_KEYS){
+    const row = document.createElement('label');
+    row.className='item';
+    row.style.justifyContent='flex-start';
+    row.innerHTML = `<input type="checkbox" data-role="${r}" style="margin-right:10px"> <span>${escapeHtml(roleLabel(r))}</span>`;
+    rolesWrap.appendChild(row);
+  }
+
+  let editingId = null;
+  let pages = [];
+  let quiz = [];
+
+  // toolbar commands for modal editor
+  function exec(cmd){
+    if(cmd==='createLink'){
+      const url = prompt('Link URL:');
+      if(url) document.execCommand('createLink', false, url);
+      return;
+    }
+    document.execCommand(cmd, false, null);
+  }
+
+  // modal
+  const modal = document.getElementById('modal');
+  const editor = document.getElementById('editor');
+  let editingPageIndex = null;
+
+  document.getElementById('closeModal').onclick = ()=>{ modal.style.display='none'; };
+  document.querySelectorAll('[data-ecmd]').forEach(b=>{
+    b.onclick = ()=> exec(b.getAttribute('data-ecmd'));
+  });
+  document.getElementById('insImg').onclick = ()=>{
+    const url = prompt('Image URL (https://...):');
+    if(!url) return;
+    document.execCommand('insertHTML', false, `<img src="${escapeHtml(url)}" style="max-width:100%;border-radius:14px;border:1px solid rgba(15,23,42,.10)"/>`);
+  };
+  document.getElementById('insVid').onclick = ()=>{
+    const url = prompt('YouTube/Vimeo embed URL (iframe src):');
+    if(!url) return;
+    document.execCommand('insertHTML', false, `<div style="position:relative;padding-top:56.25%"><iframe src="${escapeHtml(url)}" style="position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:14px"></iframe></div>`);
+  };
+  document.getElementById('savePage').onclick = ()=>{
+    if(editingPageIndex===null) return;
+    pages[editingPageIndex].html = editor.innerHTML;
+    modal.style.display='none';
+    renderPages();
+  };
+
+  function renderPages(){
+    const list = document.getElementById('pagesList');
+    list.innerHTML='';
+    if(pages.length===0){
+      list.innerHTML = '<div class="notice">No pages yet. Click “Add Page”.</div>';
+      return;
+    }
+    pages.forEach((p,i)=>{
+      const div = document.createElement('div');
+      div.className='item';
+      div.innerHTML = `
+        <div><b>Page ${i+1}</b><div class="small">${escapeHtml((p.plain||'').slice(0,80))}</div></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn ghost" data-act="edit">Edit</button>
+          <button class="btn ghost" data-act="up">↑</button>
+          <button class="btn ghost" data-act="down">↓</button>
+          <button class="btn danger" data-act="del">Delete</button>
+        </div>
+      `;
+      div.querySelector('[data-act="edit"]').onclick = ()=>{
+        editingPageIndex = i;
+        editor.innerHTML = pages[i].html || '';
+        modal.style.display='flex';
+      };
+      div.querySelector('[data-act="up"]').onclick = ()=>{
+        if(i===0) return;
+        const t=pages[i-1]; pages[i-1]=pages[i]; pages[i]=t; renderPages();
+      };
+      div.querySelector('[data-act="down"]').onclick = ()=>{
+        if(i===pages.length-1) return;
+        const t=pages[i+1]; pages[i+1]=pages[i]; pages[i]=t; renderPages();
+      };
+      div.querySelector('[data-act="del"]').onclick = ()=>{
+        if(!confirm('Delete this page?')) return;
+        pages.splice(i,1); renderPages();
+      };
+      list.appendChild(div);
+    });
+  }
+
+  function renderQuiz(){
+    const list = document.getElementById('quizList');
+    list.innerHTML='';
+    if(quiz.length===0){
+      list.innerHTML = '<div class="notice">No quiz questions. (Optional)</div>';
+      return;
+    }
+    quiz.forEach((q,i)=>{
+      const div = document.createElement('div');
+      div.className='item';
+      div.innerHTML = `
+        <div>
+          <b>Q${i+1}:</b> ${escapeHtml(q.q)}
+          <div class="small">Answers: ${q.answers.map(escapeHtml).join(' • ')} (Correct: ${q.correctIndex+1})</div>
+        </div>
+        <button class="btn danger">Delete</button>
+      `;
+      div.querySelector('button').onclick = ()=>{ quiz.splice(i,1); renderQuiz(); };
+      list.appendChild(div);
+    });
+  }
+
+  document.getElementById('addPageBtn').onclick = ()=>{
+    pages.push({html:'<p>New page…</p>', plain:'New page…'});
+    renderPages();
+  };
+
+  document.getElementById('addQBtn').onclick = ()=>{
+    const q = prompt('Question text:');
+    if(!q) return;
+    const a1 = prompt('Answer 1:'); if(!a1) return;
+    const a2 = prompt('Answer 2:'); if(!a2) return;
+    const a3 = prompt('Answer 3:') || '';
+    const a4 = prompt('Answer 4:') || '';
+    const answers = [a1,a2,a3,a4].filter(x=>x.trim().length>0);
+    const correct = Number(prompt('Correct answer number (1-'+answers.length+'):')||'1');
+    const ci = Math.max(1, Math.min(answers.length, correct)) - 1;
+    quiz.push({q, answers, correctIndex: ci});
+    renderQuiz();
+  };
+
+  function clearForm(){
+    editingId = null;
+    document.getElementById('title').value='';
+    document.getElementById('desc').value='';
+    document.getElementById('introReq').checked=false;
+    rolesWrap.querySelectorAll('input[type="checkbox"]').forEach(cb=>cb.checked=false);
+    pages = [];
+    quiz = [];
+    renderPages();
+    renderQuiz();
+    document.getElementById('msg').textContent='';
+  }
+  document.getElementById('clearBtn').onclick = clearForm;
+
+  async function loadAll(){
+    const data = await API.get('/api/it/modules');
+    const list = document.getElementById('allModules');
+    list.innerHTML='';
+    const ms = data.modules || [];
+    if(ms.length===0){ show('empty'); return; } else hide('empty');
+    ms.sort((a,b)=> (b.flags?.introRequired?1:0)-(a.flags?.introRequired?1:0) || a.title.localeCompare(b.title));
+    ms.forEach(m=>{
+      const div = document.createElement('div');
+      div.className='item';
+      div.innerHTML = `
+        <div>
+          <b>${escapeHtml(m.title)}</b>
+          <div class="small">${escapeHtml(m.description||'')} • Roles: ${m.roles.map(roleLabel).join(', ')} ${m.flags?.introRequired?' • REQUIRED FIRST':''}</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn ghost">Edit</button>
+          <button class="btn danger">Delete</button>
+        </div>
+      `;
+      div.querySelectorAll('button')[0].onclick = ()=>loadIntoForm(m.id);
+      div.querySelectorAll('button')[1].onclick = async ()=>{
+        if(!confirm('Delete this module?')) return;
+        await API.del('/api/it/modules?id='+encodeURIComponent(m.id));
+        await loadAll();
+      };
+      list.appendChild(div);
+    });
+  }
+
+  async function loadIntoForm(id){
+    const m = await API.get('/api/it/module?id='+encodeURIComponent(id));
+    editingId = m.id;
+    document.getElementById('title').value = m.title||'';
+    document.getElementById('desc').value = m.description||'';
+    document.getElementById('introReq').checked = !!(m.flags && m.flags.introRequired);
+    rolesWrap.querySelectorAll('input[type="checkbox"]').forEach(cb=>{
+      const r = cb.getAttribute('data-role');
+      cb.checked = (m.roles||[]).includes(r);
+    });
+    document.getElementById('fontSel').value = (m.styling&&m.styling.font)||'';
+    document.getElementById('sizeSel').value = (m.styling&&m.styling.baseSize)||16;
+    document.getElementById('textColor').value = (m.styling&&m.styling.textColor)||'#0f172a';
+    document.getElementById('accentColor').value = (m.styling&&m.styling.accentColor)||'#0b76b7';
+    pages = (m.pages||[]).map(p=>({html:p.html||'', plain:(p.plain||'')}));
+    quiz = (m.quiz && m.quiz.questions) ? m.quiz.questions : [];
+    renderPages();
+    renderQuiz();
+    setText('msg','Editing module: '+m.title);
+  }
+
+  document.getElementById('saveModuleBtn').onclick = async ()=>{
+    try{
+      const title = document.getElementById('title').value.trim();
+      if(!title) throw new Error('Title is required.');
+      if(pages.length===0) throw new Error('Add at least one page.');
+      // derive plain text previews
+      pages = pages.map(p=>{
+        const tmp = document.createElement('div');
+        tmp.innerHTML = p.html || '';
+        const plain = (tmp.textContent||'').trim().slice(0,120);
+        return {html: p.html, plain};
+      });
+      const roles = Array.from(rolesWrap.querySelectorAll('input[type="checkbox"]'))
+        .filter(cb=>cb.checked).map(cb=>cb.getAttribute('data-role'));
+      if(roles.length===0) throw new Error('Select at least one role.');
+      const payload = {
+        id: editingId,
+        title,
+        description: document.getElementById('desc').value.trim(),
+        roles,
+        flags: { introRequired: document.getElementById('introReq').checked },
+        styling: {
+          font: document.getElementById('fontSel').value,
+          baseSize: Number(document.getElementById('sizeSel').value||16),
+          textColor: document.getElementById('textColor').value,
+          accentColor: document.getElementById('accentColor').value,
+        },
+        pages,
+        quiz: { shuffle:true, passRate:1.0, questions: quiz }
+      };
+      await API.post('/api/it/modules', payload);
+      document.getElementById('msg').style.color='green';
+      document.getElementById('msg').textContent='Saved.';
+      await loadAll();
+      if(!editingId) clearForm();
+    }catch(e){
+      document.getElementById('msg').style.color='#b91c1c';
+      document.getElementById('msg').textContent = e.message || String(e);
+    }
+  };
+
+  // main toolbar buttons apply to modal editor only; keep simple
+  document.querySelectorAll('[data-cmd]').forEach(b=>{
+    b.onclick = ()=>{};
+  });
+
+  renderPages();
+  renderQuiz();
+  await loadAll();
+})();
+</script>
+
+<script src="/assets/client.js"></script>
+</body>
+</html>

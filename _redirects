@@ -1,3 +1,6 @@
 /dashboard /dashboard.html 200
+/admin /admin.html 200
+/it-tools /it-tools.html 200
 /module /module.html 200
 /quiz /quiz.html 200
+/set-password /set-password.html 200
