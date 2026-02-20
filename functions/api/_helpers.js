@@ -240,6 +240,20 @@ export async function deleteOverrideModule(env, id){
 }
 
 
+
+function isMeaningfulPage(p){
+  if (!p || typeof p !== 'object') return false;
+  const t = (p.type || '').toString();
+  // common fields across our builders
+  const s = (p.title || '') + (p.heading || '') + (p.text || '') + (p.html || '') + (p.url || '') + (p.src || '');
+  if (s.trim().length > 0) return true;
+  // allow structured blocks
+  if (Array.isArray(p.blocks) && p.blocks.length) return true;
+  // allow image/video types with url/src
+  if ((t === 'image' || t === 'video') && ((p.url||p.src||'').trim().length>0)) return true;
+  return false;
+}
+
 function mergeModule(base, override){
   if (!override || typeof override !== 'object') return base;
   const out = { ...base };
@@ -249,7 +263,14 @@ function mergeModule(base, override){
 
     // arrays: only replace if non-empty
     if (Array.isArray(v)){
-      if (v.length > 0) out[k] = v;
+      if (v.length > 0){
+        if (k === 'pages'){
+          const meaningful = v.filter(isMeaningfulPage);
+          if (meaningful.length > 0) out[k] = meaningful;
+        } else {
+          out[k] = v;
+        }
+      }
       continue;
     }
 
@@ -275,8 +296,18 @@ export async function getAllModules(env){
   const mergedCore = MODULES.map(m => {
     const o = overrides[m.id];
     if (!o) return {...m, builtIn:true, overridden:false};
-    // override replaces built-in (but keep id stable)
-    return mergeModule({ ...m, builtIn:true, overridden:true }, { ...o, id: m.id });
+    // override replaces built-in, but built-in identity/type is locked
+    const merged = mergeModule({ ...m, builtIn:true, overridden:true }, { ...o });
+    merged.id = m.id;
+    merged.type = m.type;
+    // safety: if override wipes content/pages, restore from base
+    if ((!merged.content || (typeof merged.content === 'string' && merged.content.trim().length === 0)) &&
+        (!Array.isArray(merged.pages) || merged.pages.length === 0) &&
+        ((m.content && m.content.trim().length) || (Array.isArray(m.pages) && m.pages.length))){
+      merged.content = m.content;
+      merged.pages = m.pages;
+    }
+    return merged;
   });
 
   // avoid id collisions with core modules
