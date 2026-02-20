@@ -43,6 +43,17 @@ function escapeHtml(input) {
     .replace(/'/g, "&#039;");
 }
 
+function roleLabel(r){
+  const v=(r||'').toString().toLowerCase();
+  if (v==='cs' || v==='customer_service' || v==='customer service') return 'Customer Service';
+  if (v==='it' || v==='it_support' || v==='it support') return 'IT';
+  if (v==='admin') return 'Admin';
+  if (v==='instructor' || v==='swim_instructor' || v==='swim instructor') return 'Instructor';
+  // title-case fallback
+  return v.replace(/[_-]+/g,' ').replace(/\b\w/g, ch => ch.toUpperCase());
+}
+
+
 
 function qs(name) { return new URLSearchParams(location.search).get(name); }
 
