@@ -1,37 +1,249 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bright Waves – Admin</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin Panel</title>
   <link rel="stylesheet" href="/assets/styles.css" />
+  
 </head>
 <body>
+  <div class="topbar">
+    <div class="brand">
+      <a href="/dashboard" class="brand" style="color:inherit">
+        <div class="logo"></div>
+        <div>
+          <h1>Bright Waves</h1>
+          <div class="sub">Admin Panel</div>
+        </div>
+      </a>
+    </div>
+    <div class="pill">
+      <div class="small" id="who"></div>
+      <button class="btn secondary" onclick="logout()">Logout</button>
+    </div>
+  </div>
   <div class="container">
-    <div class="topbar">
-      <div class="brand">
-        <div class="logo" aria-hidden="true"></div>
-        <h2 style="margin:0;color:var(--primary)">Bright Waves</h2>
+    <div class="grid two">
+      <div class="card">
+        <h2>Users</h2>
+        <input id="search" class="input" placeholder="Search users…" />
+        <div style="height:10px"></div>
+        <div id="userList" class="list"></div>
       </div>
-      <div class="pill">
-        <span id="currentUserInfo" style="font-weight:900"></span>
-        <button class="secondary" id="logoutBtn">Logout</button>
+      <div class="card" id="editCard">
+        <h2>Edit user</h2>
+        <div class="muted" id="editHint">Select a user to edit.</div>
+        <div id="editForm" style="display:none">
+          <div class="hr"></div>
+          <div class="row">
+            <div>
+              <div class="small">Full name</div>
+              <input id="name" class="input" />
+            </div>
+            <div>
+              <div class="small">Username</div>
+              <input id="username" class="input" />
+            </div>
+          </div>
+          <div style="height:10px"></div>
+          <div class="row">
+            <div>
+              <div class="small">Reset password (optional)</div>
+              <input id="password" class="input" placeholder="Leave blank to keep" />
+              <div class="small">Admins can force reset for non-IT users.</div>
+            </div>
+            <div>
+              <div class="small">Roles</div>
+              <div id="rolesBox" class="card" style="box-shadow:none;border:1px solid var(--border);padding:12px;border-radius:16px"></div>
+              <div class="small">Admin cannot assign or edit IT role.</div>
+            </div>
+          </div>
+          <div class="hr"></div>
+          <div class="row">
+            <button class="btn" id="saveBtn">Save</button>
+            <button class="btn danger" id="resetProgBtn">Reset Progress</button>
+          </div>
+          <div id="msg" class="small" style="margin-top:10px"></div>
+          <div class="hr"></div>
+          <h2 style="margin-top:0">Progress</h2>
+          <div id="progressList" class="list"></div>
+        </div>
       </div>
     </div>
-
-    <div id="pageHost"></div>
-  </div>
-
-  <div id="welcomeOverlay" class="overlay hidden">
-    <div class="card overlay-card">
-      <div class="spark" aria-hidden="true"></div>
-      <h3 id="welcomeTitle" style="color:var(--primary)">Message</h3>
-      <p id="welcomeSubtitle">…</p>
-      <button id="welcomeContinueBtn" style="width:100%">Continue</button>
+    <div class="card" style="margin-top:18px">
+      <h2>Create user</h2>
+      <div class="row">
+        <input id="cName" class="input" placeholder="Full name" />
+        <input id="cUser" class="input" placeholder="Username" />
+      </div>
+      <div style="height:10px"></div>
+      <div class="row">
+        <input id="cPass" class="input" placeholder="Temp password" />
+        <select id="cRole" class="input">
+          <option value="instructor">Instructor</option>
+          <option value="customer_service">Customer Service</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div style="height:10px"></div>
+      <button class="btn" id="createBtn">Create User</button>
+      <div id="cMsg" class="small" style="margin-top:10px"></div>
     </div>
   </div>
+<script>
+(async ()=>{
+  const me = await requireAuth();
+  if(!me.roles.includes('admin') && !me.roles.includes('it')){ location.href='/dashboard'; return; }
+  setText('who', `${me.name} • ${me.roles.map(roleLabel).join(', ')}`);
+  const isIT = me.roles.includes('it');
+  const canEditIT = isIT;
 
-  <script src="/assets/app.js"></script>
-  <script>adminPageInit();</script>
+  let users = [];
+  let selected = null;
+
+  async function load(){
+    const data = await API.get('/api/admin/users');
+    users = data.users || [];
+    renderList();
+  }
+  function renderList(){
+    const q = (document.getElementById('search').value||'').toLowerCase();
+    const list = document.getElementById('userList');
+    list.innerHTML='';
+    const sorted = [...users].sort((a,b)=>{
+      const aIt = a.roles.includes('it')?1:0;
+      const bIt = b.roles.includes('it')?1:0;
+      if(aIt!==bIt) return bIt-aIt; // IT on top
+      const aAdm=a.roles.includes('admin')?1:0, bAdm=b.roles.includes('admin')?1:0;
+      if(aAdm!==bAdm) return bAdm-aAdm;
+      return a.name.localeCompare(b.name);
+    });
+    for(const u of sorted){
+      if(q && !(u.name.toLowerCase().includes(q) || u.username.toLowerCase().includes(q))) continue;
+      const item = document.createElement('div');
+      item.className='item';
+      item.innerHTML = `
+        <div>
+          <b>${escapeHtml(u.name)}</b>
+          <div class="small">${escapeHtml(u.username)} • ${u.roles.map(roleLabel).join(', ')}</div>
+        </div>
+        <button class="btn" data-id="${u.id}">Open</button>
+      `;
+      item.querySelector('button').onclick = ()=>openUser(u.id);
+      list.appendChild(item);
+    }
+  }
+  async function openUser(id){
+    selected = users.find(x=>x.id===id);
+    if(!selected) return;
+    // disallow admin editing IT user
+    if(selected.roles.includes('it') && !canEditIT){
+      document.getElementById('editHint').textContent = 'IT accounts can only be edited by IT.';
+      document.getElementById('editForm').style.display='none';
+      return;
+    }
+    document.getElementById('editHint').style.display='none';
+    document.getElementById('editForm').style.display='';
+    document.getElementById('name').value = selected.name;
+    document.getElementById('username').value = selected.username;
+    document.getElementById('password').value = '';
+
+    const rolesBox = document.getElementById('rolesBox');
+    rolesBox.innerHTML='';
+    const all = ['admin','instructor','customer_service','it'];
+    for(const r of all){
+      const row = document.createElement('label');
+      row.className='item';
+      row.style.justifyContent='flex-start';
+      const disabled = (!canEditIT && r==='it') || (selected.roles.includes('it') && !canEditIT);
+      row.innerHTML = `<input type="checkbox" ${selected.roles.includes(r)?'checked':''} ${disabled?'disabled':''} style="margin-right:10px"> <span>${escapeHtml(roleLabel(r))}</span>`;
+      const cb = row.querySelector('input');
+      cb.onchange = ()=>{};
+      rolesBox.appendChild(row);
+    }
+
+    const prog = await API.get('/api/admin/progress?id='+encodeURIComponent(selected.id));
+    const plist = document.getElementById('progressList');
+    plist.innerHTML='';
+    for(const p of (prog.modules||[])){
+      const div = document.createElement('div');
+      div.className='item';
+      div.innerHTML = `<div><b>${escapeHtml(p.title)}</b><div class="small">${p.status}</div></div><span class="badge">${escapeHtml(p.status)}</span>`;
+      plist.appendChild(div);
+    }
+  }
+
+  document.getElementById('search').oninput = renderList;
+
+  document.getElementById('saveBtn').onclick = async ()=>{
+    if(!selected) return;
+    const roles = [];
+    const cbs = Array.from(document.querySelectorAll('#rolesBox input[type="checkbox"]'));
+    const labels = ['admin','instructor','customer_service','it'];
+    cbs.forEach((cb,i)=>{ if(cb.checked) roles.push(labels[i]); });
+    // admin cannot touch IT role
+    if(!canEditIT){
+      roles.splice(roles.indexOf('it'),1);
+      if(selected.roles.includes('it')){ roles.push('it'); }
+    }
+    const payload = {
+      id:selected.id,
+      name: document.getElementById('name').value.trim(),
+      username: document.getElementById('username').value.trim(),
+      roles,
+      password: document.getElementById('password').value,
+      forceReset: document.getElementById('password').value ? true : false
+    };
+    try{
+      await API.put('/api/admin/users', payload);
+      document.getElementById('msg').style.color='green';
+      document.getElementById('msg').textContent='Saved.';
+      await load();
+      await openUser(selected.id);
+    }catch(e){
+      document.getElementById('msg').style.color='#b91c1c';
+      document.getElementById('msg').textContent=e.message||String(e);
+    }
+  };
+
+  document.getElementById('resetProgBtn').onclick = async ()=>{
+    if(!selected) return;
+    if(!confirm('Reset progress for this user?')) return;
+    try{
+      await API.post('/api/admin/reset-progress',{id:selected.id});
+      document.getElementById('msg').style.color='green';
+      document.getElementById('msg').textContent='Progress reset.';
+      await openUser(selected.id);
+    }catch(e){
+      document.getElementById('msg').style.color='#b91c1c';
+      document.getElementById('msg').textContent=e.message||String(e);
+    }
+  };
+
+  document.getElementById('createBtn').onclick = async ()=>{
+    const name = document.getElementById('cName').value.trim();
+    const username = document.getElementById('cUser').value.trim();
+    const password = document.getElementById('cPass').value;
+    const role = document.getElementById('cRole').value;
+    try{
+      await API.post('/api/admin/create-user',{name, username, password, roles:[role]});
+      document.getElementById('cMsg').style.color='green';
+      document.getElementById('cMsg').textContent='User created.';
+      document.getElementById('cName').value='';
+      document.getElementById('cUser').value='';
+      document.getElementById('cPass').value='';
+      await load();
+    }catch(e){
+      document.getElementById('cMsg').style.color='#b91c1c';
+      document.getElementById('cMsg').textContent=e.message||String(e);
+    }
+  };
+
+  await load();
+})();
+</script>
+
+<script src="/assets/client.js"></script>
 </body>
 </html>
